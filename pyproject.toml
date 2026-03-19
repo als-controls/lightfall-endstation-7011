@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "ophyd>=1.6.0",
     "bluesky>=1.8.0",
+    "lucid",  # For controller plugin base classes
 ]
 
 [project.optional-dependencies]
@@ -34,8 +35,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://git.als.lbl.gov/bcs/lucid-endstation-7011"
-Repository = "https://git.als.lbl.gov/bcs/lucid-endstation-7011"
+Homepage = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
+Repository = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
+
+[project.entry-points."lucid.plugins"]
+lucid_endstation_7011 = "lucid_endstation_7011.manifest:manifest"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lucid_endstation_7011"]
