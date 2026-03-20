@@ -91,15 +91,20 @@ class PIMTEControllerPlugin:
 
         Returns priority 150 for PIMTE devices (higher than generic camera).
         """
+        from loguru import logger
+        
         if len(items) != 1:
             return None
 
         item = items[0]
+        logger.debug("PIMTEControllerPlugin.can_control() checking device: {}", item.name)
 
         # Check tags
         if item.device_info and item.device_info.tags:
             tags = {tag.lower() for tag in item.device_info.tags}
+            logger.debug("Device tags: {}", tags)
             if tags & {"pimte", "mte", "princeton"}:
+                logger.debug("Matched via tags, returning 150")
                 return 150
 
         # Check device class
@@ -109,9 +114,12 @@ class PIMTEControllerPlugin:
         elif item.ophyd_obj is not None:
             device_class = type(item.ophyd_obj).__name__
 
+        logger.debug("Device class: '{}'", device_class)
         if any(c.lower() in device_class.lower() for c in ("pimte", "mte", "proem", "princeton")):
+            logger.debug("Matched via device_class, returning 150")
             return 150
 
+        logger.debug("No match, returning None")
         return None
 
     def create_widget(self, parent: QWidget | None = None) -> QWidget:
