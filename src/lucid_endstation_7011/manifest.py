@@ -2,6 +2,7 @@
 
 Defines all LUCID plugins provided by this package:
 - Controller plugins for Andor and PIMTE cameras
+- Controller plugin for detector diodes
 """
 
 from lucid.plugins.manifest import PluginEntry, PluginManifest
@@ -23,6 +24,13 @@ manifest = PluginManifest(
             name="pimte_camera",
             import_path="lucid_endstation_7011.widgets.pimte:PIMTEControllerPlugin",
             metadata={"priority": 150},
+        ),
+        # Controller plugin for detector diodes
+        PluginEntry(
+            type_name="controller",
+            name="detector_diode",
+            import_path="lucid_endstation_7011.widgets.diode:DiodeControllerPlugin",
+            metadata={"priority": 100},
         ),
     ],
 )
