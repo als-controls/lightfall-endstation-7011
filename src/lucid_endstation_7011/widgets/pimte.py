@@ -6,8 +6,9 @@ widgets with temperature display.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
+from lucid.plugins.controller_plugin import ControllerPlugin
 from PySide6.QtWidgets import QGroupBox, QWidget
 
 if TYPE_CHECKING:
@@ -63,16 +64,13 @@ class _PIMTECameraWidget:
         return _Widget(parent)
 
 
-class PIMTEControllerPlugin:
+class PIMTEControllerPlugin(ControllerPlugin):
     """Controller plugin for Princeton PIMTE cameras.
 
     This plugin provides PIMTE-specific camera control widgets for
     devices tagged with 'pimte', 'mte', 'princeton' or having
     PIMTE-related device classes.
     """
-
-    type_name: ClassVar[str] = "controller"
-    is_singleton: ClassVar[bool] = True
 
     @property
     def name(self) -> str:
@@ -125,13 +123,3 @@ class PIMTEControllerPlugin:
     def create_widget(self, parent: QWidget | None = None) -> QWidget:
         """Create a PIMTE camera control widget."""
         return _PIMTECameraWidget(parent)
-
-    def get_introspection_data(self) -> dict[str, Any]:
-        """Get introspection data for MCP tools."""
-        return {
-            "type": self.type_name,
-            "name": self.name,
-            "display_name": self.display_name,
-            "class": self.__class__.__name__,
-            "module": self.__class__.__module__,
-        }

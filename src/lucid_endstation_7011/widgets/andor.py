@@ -6,8 +6,9 @@ widgets with cooler controls.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
+from lucid.plugins.controller_plugin import ControllerPlugin
 from PySide6.QtWidgets import QGroupBox, QWidget
 
 if TYPE_CHECKING:
@@ -89,15 +90,12 @@ class _AndorCameraWidget:
         return _Widget(parent)
 
 
-class AndorControllerPlugin:
+class AndorControllerPlugin(ControllerPlugin):
     """Controller plugin for Andor cameras.
 
     This plugin provides Andor-specific camera control widgets for
     devices tagged with 'andor' or having Andor-related device classes.
     """
-
-    type_name: ClassVar[str] = "controller"
-    is_singleton: ClassVar[bool] = True
 
     @property
     def name(self) -> str:
@@ -142,13 +140,3 @@ class AndorControllerPlugin:
     def create_widget(self, parent: QWidget | None = None) -> QWidget:
         """Create an Andor camera control widget."""
         return _AndorCameraWidget(parent)
-
-    def get_introspection_data(self) -> dict[str, Any]:
-        """Get introspection data for MCP tools."""
-        return {
-            "type": self.type_name,
-            "name": self.name,
-            "display_name": self.display_name,
-            "class": self.__class__.__name__,
-            "module": self.__class__.__module__,
-        }
