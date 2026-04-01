@@ -93,6 +93,12 @@ class HDF5PluginWithFileStore(FramesPerPointNumImages, HDF5PluginSWMR, FileStore
         ret = self._ensure_absolute_under_root(ret)
         return str(ret) + "/"
 
+    @read_path_template.setter
+    def read_path_template(self, val):
+        if val is not None:
+            val = str(PurePosixPath(val)) + "/"
+        self._read_path_template = val
+
     def _generate_resource(self, resource_kwargs):
         """Override to use PurePosixPath for fn.relative_to()."""
         fn = PurePosixPath(self._fn).relative_to(self.reg_root)
