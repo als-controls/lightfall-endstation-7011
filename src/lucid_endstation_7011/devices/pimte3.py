@@ -26,6 +26,7 @@ from ophyd.areadetector.cam import AreaDetectorCam
 from ophyd.areadetector.filestore_mixins import (
     FileStoreHDF5IterativeWrite,
     FileStorePluginBase,
+    resource_factory,
 )
 from ophyd.areadetector.plugins import ROIStatNPlugin_V23, TransformPlugin
 from ophyd.utils import set_and_wait
@@ -62,22 +63,59 @@ class HDF5PluginSWMR(HDF5Plugin):
 class HDF5PluginWithFileStore(FramesPerPointNumImages, HDF5PluginSWMR, FileStoreHDF5IterativeWrite):
     """Complete HDF5 plugin with file store and SWMR.
 
-    Overrides reg_root to use PurePosixPath so that IOC-side Linux
-    paths (e.g. /data/) are handled correctly even when the client
-    runs on Windows.  Upstream ophyd uses platform-aware PurePath
-    which rejects POSIX absolute paths on Windows.
+    Forces POSIX path semantics throughout so that IOC-side Linux paths
+    (e.g. /data/) work correctly when the client runs on Windows.
+
+    Upstream ophyd uses platform-aware PurePath in several places
+    (reg_root, read_path_template, _generate_resource) which breaks
+    cross-platform usage.  See: https://github.com/bluesky/ophyd/issues/XXXX
     """
+
+    path_semantics = "posix"
 
     @FileStorePluginBase.reg_root.setter
     def reg_root(self, val):
         if val is None:
-            val = os.path.sep
+            val = "/"
         root = PurePosixPath(val)
         if not root.is_absolute():
             raise ValueError(
                 f"The root part of the path must be absolute not {root=}."
             )
         self._root = root
+
+    @property
+    def read_path_template(self):
+        if self._read_path_template is None:
+            ret = PurePosixPath(self.write_path_template)
+        else:
+            ret = PurePosixPath(self._read_path_template)
+        ret = self._ensure_absolute_under_root(ret)
+        return str(ret) + "/"
+
+    def _generate_resource(self, resource_kwargs):
+        """Override to use PurePosixPath for fn.relative_to()."""
+        fn = PurePosixPath(self._fn).relative_to(self.reg_root)
+        resource, self._datum_factory = resource_factory(
+            spec=self.filestore_spec,
+            root=str(self.reg_root),
+            resource_path=str(fn),
+            resource_kwargs=resource_kwargs,
+            path_semantics=self.path_semantics,
+        )
+
+        if self._reg is not None:
+            self._resource_uid = self._reg.register_resource(
+                rpath=resource["resource_path"],
+                rkwargs=resource["resource_kwargs"],
+                root=resource["root"],
+                spec=resource["spec"],
+                path_semantics=resource["path_semantics"],
+            )
+            resource["uid"] = self._resource_uid
+
+        self._resource_uid = resource["uid"]
+        self._asset_docs_cache.append(("resource", resource))
 
 
 class StageOnFirstTrigger(ADBase):
