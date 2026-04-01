@@ -7,7 +7,9 @@ HDF5 file writing and SWMR support.
 from __future__ import annotations
 
 import logging
+import os
 import time
+from pathlib import PurePosixPath
 
 from ophyd import (
     Component as Cpt,
@@ -58,9 +60,24 @@ class HDF5PluginSWMR(HDF5Plugin):
 
 
 class HDF5PluginWithFileStore(FramesPerPointNumImages, HDF5PluginSWMR, FileStoreHDF5IterativeWrite):
-    """Complete HDF5 plugin with file store and SWMR."""
+    """Complete HDF5 plugin with file store and SWMR.
 
-    pass
+    Overrides reg_root to use PurePosixPath so that IOC-side Linux
+    paths (e.g. /data/) are handled correctly even when the client
+    runs on Windows.  Upstream ophyd uses platform-aware PurePath
+    which rejects POSIX absolute paths on Windows.
+    """
+
+    @FileStorePluginBase.reg_root.setter
+    def reg_root(self, val):
+        if val is None:
+            val = os.path.sep
+        root = PurePosixPath(val)
+        if not root.is_absolute():
+            raise ValueError(
+                f"The root part of the path must be absolute not {root=}."
+            )
+        self._root = root
 
 
 class StageOnFirstTrigger(ADBase):
