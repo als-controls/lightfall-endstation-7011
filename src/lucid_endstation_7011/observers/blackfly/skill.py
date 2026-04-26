@@ -54,6 +54,8 @@ class BlackflyAgent(AgentPlugin):
 
     @property
     def priority(self) -> int:
+        # Below the default 100 so device-specific skills sort above general utilities
+        # in the settings UI.
         return 30
 
     def get_references_dir(self) -> Path | None:
@@ -76,16 +78,19 @@ from lucid_endstation_7011.observers.blackfly import BlackflyCamera
 
 `BlackflyCamera(device_ip, bind_ip)` takes two strings: `device_ip` is the
 camera's IPv4 address; `bind_ip` is the host NIC IP the camera should send
-GVSP packets to. These two are easy to confuse — ask the user to confirm
-both before generating a plugin.
+GVSP packets to. These two are easy to confuse, so the workflow below walks
+through them explicitly.
 
 ### MCP tool
 
 `discover_blackfly_cameras(bind_ip=None, timeout_s=1.0)` — scans the local
 subnet for GigE Vision cameras and returns a list of
-`{ip, manufacturer, model, serial}` entries. If the user has not given you
-an explicit `device_ip`, call this tool first. If `bind_ip` is omitted, the
-tool auto-detects the default-route NIC.
+`{ip, manufacturer, model, serial, user_name}` entries. The `user_name` is
+the operator-set label (often something like "tomo-front") and is the
+friendliest way to disambiguate two cameras of the same model on one
+subnet. If the user has not given you an explicit `device_ip`, call this
+tool first. If `bind_ip` is omitted, the tool auto-detects the
+default-route NIC.
 
 ### Workflow
 
@@ -111,7 +116,7 @@ tool auto-detects the default-route NIC.
             name="discover_blackfly_cameras",
             description=(
                 "Scan the local subnet for FLIR Blackfly S (or any GigE Vision) cameras. "
-                "Returns a list of {ip, manufacturer, model, serial} dicts. "
+                "Returns a list of {ip, manufacturer, model, serial, user_name} dicts. "
                 "Use this when the user wants to make a Blackfly panel but hasn't given "
                 "you a specific camera IP."
             ),
@@ -136,6 +141,8 @@ tool auto-detects the default-route NIC.
             },
         )
         async def discover_blackfly_cameras(args: dict) -> dict[str, Any]:
+            import asyncio
+
             from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             from lucid_endstation_7011.observers.blackfly.discovery import discover
@@ -143,8 +150,12 @@ tool auto-detects the default-route NIC.
             bind_ip = args.get("bind_ip") or _default_bind_ip()
             timeout_s = float(args.get("timeout_s", 1.0))
             try:
-                results = discover(bind_ip=bind_ip, timeout=timeout_s)
-            except Exception as e:  # noqa: BLE001
+                # discover() does blocking UDP I/O for ~timeout_s; off-thread it so
+                # the SDK event loop stays responsive.
+                results = await asyncio.to_thread(
+                    discover, bind_ip=bind_ip, timeout=timeout_s
+                )
+            except (OSError, ValueError, RuntimeError) as e:
                 logger.error("Blackfly discovery failed: {}", e)
                 return mcp_error(f"Discovery failed: {e!r}")
 
@@ -155,6 +166,7 @@ tool auto-detects the default-route NIC.
                         "manufacturer": d.manufacturer,
                         "model": d.model,
                         "serial": d.serial,
+                        "user_name": d.user_name,
                     }
                     for d in results
                 ]

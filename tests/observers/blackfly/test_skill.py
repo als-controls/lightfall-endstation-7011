@@ -47,3 +47,18 @@ def test_blackfly_agent_references_dir_resolves():
     assert refs is not None
     assert refs.is_dir()
     assert (refs / "panel_template.py").is_file()
+
+
+def test_panel_template_is_parseable_python():
+    """The template is the literal source the agent hands to ncs_create_user_plugin —
+    if it ever drifts to invalid Python, every Blackfly panel creation breaks silently
+    until a hardware-test catches it. Parse it here as a tripwire."""
+    import ast
+
+    refs = BlackflyAgent().get_references_dir()
+    assert refs is not None
+    src = (refs / "panel_template.py").read_text(encoding="utf-8")
+    ast.parse(src)
+    # And the placeholders the workflow promises must actually be present:
+    assert "<IP>" in src
+    assert "<HOST>" in src
