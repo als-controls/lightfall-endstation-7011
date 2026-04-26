@@ -29,7 +29,7 @@ class BlackflyLivePanel(BasePanel):
     """Live-view panel hosting a single BlackflyCamera + CameraImageView."""
 
     panel_metadata: ClassVar[PanelMetadata] = PanelMetadata(
-        id="user.panels.blackfly_live",
+        id="lucid.panels.user.blackfly_live",
         name="Blackfly S Live View",
         description="Live image stream from a FLIR Blackfly S over GVCP/GVSP",
         category="Devices",

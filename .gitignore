@@ -15,6 +15,13 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
 # Local
 .venv/
 .env
