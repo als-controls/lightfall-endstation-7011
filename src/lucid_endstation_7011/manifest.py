@@ -3,6 +3,7 @@
 Defines all LUCID plugins provided by this package:
 - Controller plugins for Andor and PIMTE cameras
 - Controller plugin for detector diodes
+- Agent plugin for the Blackfly observer skill (discover_blackfly_cameras + workflow prompt)
 """
 
 from lucid.plugins.manifest import PluginEntry, PluginManifest
@@ -31,6 +32,13 @@ manifest = PluginManifest(
             name="detector_diode",
             import_path="lucid_endstation_7011.widgets.diode:DiodeControllerPlugin",
             metadata={"priority": 100},
+        ),
+        # Agent plugin: Blackfly observer skill (discover + panel-creation workflow)
+        PluginEntry(
+            type_name="agent",
+            name="blackfly",
+            import_path="lucid_endstation_7011.observers.blackfly.skill:BlackflyAgent",
+            metadata={"priority": 30},
         ),
     ],
 )
