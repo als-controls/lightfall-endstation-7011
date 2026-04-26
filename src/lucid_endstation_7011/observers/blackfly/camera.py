@@ -1,0 +1,189 @@
+"""High-level Blackfly camera: owns CCP, heartbeat, UDP stream channel."""
+from __future__ import annotations
+
+import logging
+import socket
+import struct
+import threading
+from dataclasses import dataclass
+from typing import Callable
+
+import numpy as np
+
+from lucid.ui.widgets.observers import CameraBase
+
+from . import gvcp, gvsp, pixel_formats, registers
+from .gvcp_transport import GvcpClient
+
+_log = logging.getLogger(__name__)
+
+
+@dataclass
+class Geometry:
+    width: int
+    height: int
+    pixel_format: int
+
+
+class BlackflyCamera(CameraBase):
+    def __init__(self, device_ip: str, bind_ip: str, heartbeat_timeout_ms: int = 3000):
+        self._client = GvcpClient(bind_ip=bind_ip, device_ip=device_ip, timeout=1.0)
+        self._device_ip = device_ip
+        self._bind_ip = bind_ip
+        self._heartbeat_timeout = heartbeat_timeout_ms
+        self._heartbeat_thread: threading.Thread | None = None
+        self._heartbeat_stop = threading.Event()
+        self._opened = False
+        self._stream_sk: socket.socket | None = None
+        self._receiver_thread: threading.Thread | None = None
+        self._receiver_stop = threading.Event()
+        self._on_frame: Callable[[np.ndarray], None] | None = None
+        self._latest_frame: np.ndarray | None = None
+        self._latest_lock = threading.Lock()
+
+    def open(self) -> None:
+        if self._opened:
+            return
+        self._client.write_register(registers.REG_CCP, registers.CCP_CONTROL)
+        ccp = self._client.read_register(registers.REG_CCP)
+        if (ccp & (registers.CCP_CONTROL | registers.CCP_EXCLUSIVE)) == 0:
+            raise RuntimeError(f"failed to acquire CCP, got 0x{ccp:08x}")
+        self._client.write_register(registers.REG_HEARTBEAT_TIMEOUT, self._heartbeat_timeout)
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True, name="blackfly-heartbeat",
+        )
+        self._heartbeat_thread.start()
+        self._opened = True
+
+    def close(self) -> None:
+        if not self._opened:
+            return
+        self._heartbeat_stop.set()
+        if self._heartbeat_thread:
+            self._heartbeat_thread.join(timeout=4.0)
+            if self._heartbeat_thread.is_alive():
+                _log.warning("heartbeat thread did not stop within 4s; releasing CCP anyway")
+        try:
+            self._client.write_register(registers.REG_CCP, registers.CCP_NONE)
+        except Exception as e:
+            _log.warning("CCP release failed: %r", e)
+        self._client.close()
+        self._opened = False
+
+    def _heartbeat_loop(self) -> None:
+        interval = 1.0
+        while not self._heartbeat_stop.wait(interval):
+            try:
+                ccp = self._client.read_register(registers.REG_CCP)
+            except Exception as e:
+                _log.warning("heartbeat read failed: %r", e)
+                continue
+            if (ccp & (registers.CCP_CONTROL | registers.CCP_EXCLUSIVE)) == 0:
+                _log.error("control lost: CCP register reads 0x%08x", ccp)
+                return
+
+    def read_device_info(self) -> gvcp.DeviceInfo:
+        from .discovery import discover
+        devs = [d for d in discover(self._bind_ip, [(self._device_ip, gvcp.GVCP_PORT)], timeout=1.0)
+                if d.ip == self._device_ip]
+        if not devs:
+            raise RuntimeError(f"no discovery response from {self._device_ip}")
+        return devs[0]
+
+    def read_geometry(self) -> Geometry:
+        return Geometry(
+            width=self._client.read_register(registers.REG_WIDTH),
+            height=self._client.read_register(registers.REG_HEIGHT),
+            pixel_format=self._client.read_register(registers.REG_PIXEL_FORMAT),
+        )
+
+    def configure_stream(self, host_ip: str, host_port: int, packet_size: int = 1400) -> None:
+        host_ipv4 = struct.unpack(">I", socket.inet_aton(host_ip))[0]
+        self._client.write_register(registers.REG_SC0_DEST_ADDR, host_ipv4)
+        self._client.write_register(registers.REG_SC0_PORT_HOST, host_port & 0xFFFF)
+        cur_pkt_reg = self._client.read_register(registers.REG_SC0_PACKET_SIZE)
+        new_pkt_reg = (cur_pkt_reg & 0xE0000000) | (packet_size & 0xFFFF)
+        self._client.write_register(registers.REG_SC0_PACKET_SIZE, new_pkt_reg)
+
+    def start_acquisition(self) -> None:
+        self._client.write_register(registers.REG_ACQUISITION_MODE, registers.ACQUISITION_MODE_CONTINUOUS)
+        self._client.write_register(registers.REG_ACQUISITION_START, 1)
+
+    def stop_acquisition(self) -> None:
+        self._client.write_register(registers.REG_ACQUISITION_STOP, 1)
+
+    def start_stream(
+        self,
+        on_frame: Callable[[np.ndarray], None] | None = None,
+        packet_size: int = 1400,
+    ) -> None:
+        """Opens a UDP listener, configures the camera stream, and starts acquisition."""
+        self._stream_sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._stream_sk.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 16 * 1024 * 1024)
+        actual_rcvbuf = self._stream_sk.getsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF)
+        requested = 16 * 1024 * 1024
+        if actual_rcvbuf // 2 < requested:
+            _log.warning(
+                "SO_RCVBUF clamped to %d bytes (requested %d); "
+                "check /proc/sys/net/core/rmem_max — expect packet loss at high framerate",
+                actual_rcvbuf, requested,
+            )
+        self._stream_sk.bind((self._bind_ip, 0))
+        host_port = self._stream_sk.getsockname()[1]
+
+        self.configure_stream(self._bind_ip, host_port, packet_size)
+        self._receiver_stop = threading.Event()
+        self._on_frame = on_frame
+        self._latest_frame = None
+        self._receiver_thread = threading.Thread(
+            target=self._receiver_loop, daemon=True, name="blackfly-receiver",
+        )
+        self._receiver_thread.start()
+        self.start_acquisition()
+
+    def stop_stream(self) -> None:
+        try:
+            self.stop_acquisition()
+        finally:
+            self._receiver_stop.set()
+            if self._stream_sk is not None:
+                self._stream_sk.close()
+            if self._receiver_thread is not None:
+                self._receiver_thread.join(timeout=2.0)
+
+    def get_latest_frame(self) -> np.ndarray | None:
+        with self._latest_lock:
+            return self._latest_frame
+
+    def _receiver_loop(self) -> None:
+        asm = gvsp.FrameAssembler()
+        self._stream_sk.settimeout(0.5)
+        while not self._receiver_stop.is_set():
+            try:
+                data, _ = self._stream_sk.recvfrom(65536)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            try:
+                pkt = gvsp.parse_packet(data)
+            except Exception:
+                continue
+            frame = asm.feed(pkt)
+            if frame is None:
+                continue
+            try:
+                img = pixel_formats.decode(
+                    frame.data, frame.leader.width, frame.leader.height, frame.leader.pixel_format
+                )
+            except Exception as e:
+                _log.warning("decode error: %r", e)
+                continue
+            with self._latest_lock:
+                self._latest_frame = img
+            if self._on_frame is not None:
+                try:
+                    self._on_frame(img)
+                except Exception as e:
+                    _log.warning("on_frame callback raised: %r", e)
