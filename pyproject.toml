@@ -54,3 +54,6 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "hw: requires live Blackfly S camera at BLACKFLY_TEST_IP env var",
+]
