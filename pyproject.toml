@@ -34,6 +34,9 @@ dev = [
     "ruff>=0.1.0",
 ]
 
+[project.scripts]
+bfly-discover = "lucid_endstation_7011.observers.blackfly.scripts.discover:main"
+
 [project.urls]
 Homepage = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
 Repository = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
