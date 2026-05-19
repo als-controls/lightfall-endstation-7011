@@ -27,7 +27,10 @@ class Geometry:
 
 
 class BlackflyCamera(CameraBase):
-    """FLIR Blackfly S camera over GVCP/GVSP, no vendor SDK.
+    """FLIR Blackfly camera over GVCP/GVSP, no vendor SDK.
+
+    Supports both Blackfly S (newer) and Blackfly PGE (older GRS firmware) models
+    via configurable CCP mode and acquisition register addresses.
 
     Args:
         device_ip: the camera's IPv4 address.
@@ -35,17 +38,41 @@ class BlackflyCamera(CameraBase):
                    These two are easy to swap; the camera_ip is the *target*, the bind_ip
                    is the *listener*.
         heartbeat_timeout_ms: device-side timeout if the host stops sending heartbeats.
+        ccp_mode:  CCP register value to write during ``open()``.
+                   Use ``registers.CCP_EXCLUSIVE`` (default) for cameras that deny
+                   GenICam-mapped register writes under ``CCP_CONTROL``, such as the
+                   BFLY-PGE series running GRS firmware.  ``CCP_CONTROL`` is sufficient
+                   for Blackfly S cameras.
+        reg_acq_mode:  Address of the AcquisitionMode register.  Defaults to the
+                   Blackfly S address; pass ``0xF0F04028`` for BFLY-PGE (GRS firmware).
+        reg_acq_start: Address of the AcquisitionStart command register.  Defaults to
+                   the Blackfly S address; pass ``0xF0F04030`` for BFLY-PGE.
+        reg_acq_stop:  Address of the AcquisitionStop command register.  Defaults to
+                   the Blackfly S address; pass ``0xF0F00614`` for BFLY-PGE.
 
     Lifecycle: ``open()`` → ``start_stream(on_frame=…)`` → … → ``stop_stream()`` → ``close()``.
     Or use as a context manager: ``with BlackflyCamera(...) as cam: cam.start_stream(...)``;
     ``close()`` will stop an active stream before releasing CCP.
     """
 
-    def __init__(self, device_ip: str, bind_ip: str, heartbeat_timeout_ms: int = 3000):
+    def __init__(
+        self,
+        device_ip: str,
+        bind_ip: str,
+        heartbeat_timeout_ms: int = 3000,
+        ccp_mode: int = registers.CCP_EXCLUSIVE,
+        reg_acq_mode: int = registers.REG_ACQUISITION_MODE,
+        reg_acq_start: int = registers.REG_ACQUISITION_START,
+        reg_acq_stop: int = registers.REG_ACQUISITION_STOP,
+    ):
         self._client = GvcpClient(bind_ip=bind_ip, device_ip=device_ip, timeout=1.0)
         self._device_ip = device_ip
         self._bind_ip = bind_ip
         self._heartbeat_timeout = heartbeat_timeout_ms
+        self._ccp_mode = ccp_mode
+        self._reg_acq_mode = reg_acq_mode
+        self._reg_acq_start = reg_acq_start
+        self._reg_acq_stop = reg_acq_stop
         self._heartbeat_thread: threading.Thread | None = None
         self._heartbeat_stop = threading.Event()
         self._opened = False
@@ -61,10 +88,11 @@ class BlackflyCamera(CameraBase):
             return
         # CCP must be acquired before HEARTBEAT_TIMEOUT — the timeout register
         # is writable only by the active controller (matches aravis order).
-        self._client.write_register(registers.REG_CCP, registers.CCP_CONTROL)
+        self._client.write_register(registers.REG_CCP, self._ccp_mode)
         ccp = self._client.read_register(registers.REG_CCP)
         if (ccp & (registers.CCP_CONTROL | registers.CCP_EXCLUSIVE)) == 0:
             raise RuntimeError(f"failed to acquire CCP, got 0x{ccp:08x}")
+        _log.debug("CCP acquired: 0x%08x (mode=0x%08x)", ccp, self._ccp_mode)
         self._client.write_register(registers.REG_HEARTBEAT_TIMEOUT, self._heartbeat_timeout)
         self._heartbeat_stop.clear()
         self._heartbeat_thread = threading.Thread(
@@ -104,8 +132,8 @@ class BlackflyCamera(CameraBase):
             except Exception as e:
                 _log.warning("heartbeat read failed: %r", e)
                 continue
-            if (ccp & (registers.CCP_CONTROL | registers.CCP_EXCLUSIVE)) == 0:
-                _log.error("control lost: CCP register reads 0x%08x", ccp)
+            if (ccp & self._ccp_mode) == 0:
+                _log.error("control lost: CCP register reads 0x%08x (expected mode 0x%08x)", ccp, self._ccp_mode)
                 return  # exit loop; no point keepaliving on a lost channel
 
     def read_device_info(self) -> gvcp.DeviceInfo:
@@ -137,11 +165,11 @@ class BlackflyCamera(CameraBase):
         self._client.write_register(registers.REG_SC0_PACKET_SIZE, new_pkt_reg)
 
     def start_acquisition(self) -> None:
-        self._client.write_register(registers.REG_ACQUISITION_MODE, registers.ACQUISITION_MODE_CONTINUOUS)
-        self._client.write_register(registers.REG_ACQUISITION_START, 1)
+        self._client.write_register(self._reg_acq_mode, registers.ACQUISITION_MODE_CONTINUOUS)
+        self._client.write_register(self._reg_acq_start, 1)
 
     def stop_acquisition(self) -> None:
-        self._client.write_register(registers.REG_ACQUISITION_STOP, 1)
+        self._client.write_register(self._reg_acq_stop, 1)
 
     def start_stream(
         self,
