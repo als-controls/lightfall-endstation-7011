@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "LUCID plugins for ALS Beamline 7.0.1.1 endstation"
 readme = "README.md"
 license = "BSD-3-Clause"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "ALS Beamline Controls", email = "controls@als.lbl.gov" },
 ]
@@ -17,7 +17,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
@@ -26,6 +25,10 @@ dependencies = [
     "ophyd>=1.6.0",
     "bluesky>=1.8.0",
     "lucid",  # For controller plugin base classes
+    "lucid-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
+    "numpy>=1.24",
+    "scrapbook>=0.5",
+    "tiled[client]>=0.2.3",
 ]
 
 [project.optional-dependencies]
@@ -44,8 +47,14 @@ Repository = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
 [project.entry-points."lucid.plugins"]
 lucid_endstation_7011 = "lucid_endstation_7011.manifest:manifest"
 
+[project.entry-points."lucid_pipelines.pipeline"]
+variance = "lucid_endstation_7011.pipelines:VariancePipeline"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/lucid_endstation_7011"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/lucid_endstation_7011/pipelines/notebooks/compute_variance.ipynb" = "lucid_endstation_7011/pipelines/notebooks/compute_variance.ipynb"
 
 [tool.ruff]
 line-length = 100
