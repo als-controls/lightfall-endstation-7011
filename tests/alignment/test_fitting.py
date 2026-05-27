@@ -43,3 +43,20 @@ def test_rising_edge_not_detected_as_falling():
 def test_too_few_points():
     fit = fit_falling_edge_halfcut([0.0, 1.0], [1.0, 0.0])
     assert not fit.detected
+
+
+def test_linear_ramp_not_detected():
+    # A gradual monotonic ramp with no real edge (e.g. sample in the wrong
+    # z-range) must NOT be reported as an edge — a wide-w erf can mimic a line.
+    x = np.linspace(-500, 500, 21)
+    y = np.linspace(15000.0, 500.0, 21)
+    fit = fit_falling_edge_halfcut(x, y)
+    assert not fit.detected, f"ramp falsely detected at {fit.position}, reason={fit.reason!r}"
+
+
+def test_noisy_ramp_not_detected():
+    rng = np.random.default_rng(7)
+    x = np.linspace(-500, 500, 21)
+    y = np.linspace(15000.0, 500.0, 21) + rng.normal(0, 100, x.size)
+    fit = fit_falling_edge_halfcut(x, y)
+    assert not fit.detected, f"noisy ramp falsely detected at {fit.position}, reason={fit.reason!r}"

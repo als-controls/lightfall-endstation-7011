@@ -70,3 +70,6 @@ testpaths = ["tests"]
 markers = [
     "hw: requires live Blackfly S camera at BLACKFLY_TEST_IP env var",
 ]
+filterwarnings = [
+    "ignore::scipy.optimize.OptimizeWarning",
+]

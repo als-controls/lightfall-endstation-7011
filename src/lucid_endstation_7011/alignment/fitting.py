@@ -73,10 +73,14 @@ def fit_falling_edge_halfcut(x, y, *, k_noise: float = 5.0, r2_min: float = 0.9)
     noise = float(np.std(resid))
     step = baseline - floor
 
+    if not (np.isfinite(r2) and np.isfinite(noise) and np.isfinite(x0) and np.isfinite(w)):
+        return EdgeFit(False, x0, baseline, floor, abs(w), r2, "non-finite fit quality metrics")
     if step <= k_noise * noise:
-        return EdgeFit(False, x0, baseline, floor, abs(w), r2, "step height below noise threshold")
+        return EdgeFit(False, x0, baseline, floor, abs(w), r2, "step height below noise threshold (rising edge or no edge)")
+    if abs(w) >= span:
+        return EdgeFit(False, x0, baseline, floor, abs(w), r2, "fitted width exceeds scan span (no localized edge)")
     if r2 < r2_min:
-        return EdgeFit(False, x0, baseline, floor, abs(w), r2, f"poor fit (R2={r2:.3f})")
+        return EdgeFit(False, x0, baseline, floor, abs(w), r2, f"poor fit (R2={r2:.3f}); edge may be near/outside scan range or too noisy")
     if not (x.min() <= x0 <= x.max()):
         return EdgeFit(False, x0, baseline, floor, abs(w), r2, "edge outside scan range")
     return EdgeFit(True, x0, baseline, floor, abs(w), r2, "")
