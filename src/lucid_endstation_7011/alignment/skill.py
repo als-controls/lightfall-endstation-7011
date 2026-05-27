@@ -46,3 +46,67 @@ def _beam_status(catalog, diode_name: str = DIODE_NAME, threshold_nA: float = BE
         "beam_present": current >= threshold_nA,
         "threshold_nA": threshold_nA,
     }
+
+
+def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = None):
+    """Read (x, y) numpy arrays from a Bluesky run's primary stream via Tiled.
+
+    y defaults to the diode column; x to the scanned motor column (the first
+    non-diode, non-timestamp column). Raises RuntimeError on missing data.
+    """
+    import numpy as np
+    from lucid.services.tiled_service import TiledService
+    from lucid.utils.tiled_helpers import read_events
+
+    service = TiledService.get_instance()
+    if not service.is_connected or service._client is None:
+        raise RuntimeError("Tiled service not connected")
+    run = service._client[uid]
+    if "primary" not in run:
+        raise RuntimeError("run has no 'primary' stream")
+    events = read_events(run["primary"])
+    if events is None:
+        raise RuntimeError("no readable data in primary stream")
+
+    cols = [c for c in events.keys() if not str(c).startswith("ts_")]
+    if not cols:
+        raise RuntimeError("no data columns in primary stream")
+
+    yf = y_field if (y_field and y_field in cols) else None
+    if yf is None:
+        match = [c for c in cols if "iode" in str(c)]
+        yf = match[0] if match else (DIODE_NAME if DIODE_NAME in cols else cols[-1])
+    if x_field and x_field in cols:
+        xf = x_field
+    else:
+        xf = next((c for c in cols if c != yf), cols[0])
+
+    x = np.asarray(events[xf], dtype=float)
+    y = np.asarray(events[yf], dtype=float)
+    return x, y
+
+
+def _fit_lift_from_uid(uid: str, x_field: str | None = None, y_field: str | None = None) -> dict:
+    x, y = _read_scan_xy(uid, x_field, y_field)
+    fit = fit_falling_edge_halfcut(x, y)
+    return {
+        "detected": fit.detected,
+        "halfcut": fit.position,
+        "baseline": fit.baseline,
+        "floor": fit.floor,
+        "r2": fit.r2,
+        "reason": fit.reason,
+    }
+
+
+def _fit_theta_from_uid(uid: str, x_field: str | None = None, y_field: str | None = None) -> dict:
+    x, y = _read_scan_xy(uid, x_field, y_field)
+    fit = fit_peak(x, y)
+    return {
+        "detected": fit.detected,
+        "peak": fit.position,
+        "amplitude": fit.amplitude,
+        "background": fit.background,
+        "r2": fit.r2,
+        "reason": fit.reason,
+    }
