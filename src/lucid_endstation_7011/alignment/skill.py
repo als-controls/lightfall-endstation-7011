@@ -48,6 +48,34 @@ def _beam_status(catalog, diode_name: str = DIODE_NAME, threshold_nA: float = BE
     }
 
 
+def _select_xy_fields(
+    cols: list[str], x_field: str | None = None, y_field: str | None = None
+) -> tuple[str, str]:
+    """Choose the (x, y) column names for a scan.
+
+    y defaults to the diode column (a column containing "iode", else
+    ``DIODE_NAME``, else the last column); x defaults to the first column that
+    is not y. Raises RuntimeError if there are no columns or if x and y cannot
+    be resolved to two distinct columns (pass x_field/y_field explicitly then).
+    """
+    if not cols:
+        raise RuntimeError("no data columns in primary stream")
+    yf = y_field if (y_field and y_field in cols) else None
+    if yf is None:
+        match = [c for c in cols if "iode" in str(c)]
+        yf = match[0] if match else (DIODE_NAME if DIODE_NAME in cols else cols[-1])
+    if x_field and x_field in cols:
+        xf = x_field
+    else:
+        xf = next((c for c in cols if c != yf), None)
+    if xf is None or xf == yf:
+        raise RuntimeError(
+            "could not infer distinct x and y columns from the scan; "
+            "pass x_field and y_field explicitly"
+        )
+    return xf, yf
+
+
 def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = None):
     """Read (x, y) numpy arrays from a Bluesky run's primary stream via Tiled.
 
@@ -69,20 +97,12 @@ def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = No
         raise RuntimeError("no readable data in primary stream")
 
     cols = [c for c in events.keys() if not str(c).startswith("ts_")]
-    if not cols:
-        raise RuntimeError("no data columns in primary stream")
-
-    yf = y_field if (y_field and y_field in cols) else None
-    if yf is None:
-        match = [c for c in cols if "iode" in str(c)]
-        yf = match[0] if match else (DIODE_NAME if DIODE_NAME in cols else cols[-1])
-    if x_field and x_field in cols:
-        xf = x_field
-    else:
-        xf = next((c for c in cols if c != yf), cols[0])
+    xf, yf = _select_xy_fields(cols, x_field, y_field)
 
     x = np.asarray(events[xf], dtype=float)
     y = np.asarray(events[yf], dtype=float)
+    if x.size == 0 or y.size == 0:
+        raise RuntimeError("primary stream has no data points")
     return x, y
 
 

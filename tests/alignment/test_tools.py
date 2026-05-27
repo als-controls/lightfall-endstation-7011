@@ -92,3 +92,34 @@ def test_fit_theta_from_uid(monkeypatch):
     res = skill._fit_theta_from_uid("uid-3")
     assert res["detected"] is True
     assert abs(res["peak"] - 0.8) < 0.25
+
+
+def test_select_xy_fields_defaults_to_diode():
+    xf, yf = skill._select_xy_fields(["sample_lift", "DetectorDiodeCurrent"])
+    assert yf == "DetectorDiodeCurrent"
+    assert xf == "sample_lift"
+
+
+def test_select_xy_fields_matches_iode_substring():
+    xf, yf = skill._select_xy_fields(["sample_rotate_steppertheta", "diode_current"])
+    assert yf == "diode_current"
+    assert xf == "sample_rotate_steppertheta"
+
+
+def test_select_xy_fields_explicit_fields():
+    xf, yf = skill._select_xy_fields(["a", "b", "c"], x_field="b", y_field="c")
+    assert (xf, yf) == ("b", "c")
+
+
+def test_select_xy_fields_single_column_raises():
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        skill._select_xy_fields(["DetectorDiodeCurrent"])
+
+
+def test_select_xy_fields_empty_raises():
+    import pytest
+
+    with pytest.raises(RuntimeError):
+        skill._select_xy_fields([])
