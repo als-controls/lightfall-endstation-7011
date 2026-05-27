@@ -243,7 +243,12 @@ which device to use before proceeding.
             from lucid.plugins.agents._mcp_helpers import mcp_result
 
             def _run():
-                return mcp_result(_beam_status(DeviceCatalog.get_instance()))
+                from lucid.plugins.agents._mcp_helpers import mcp_error
+
+                try:
+                    return mcp_result(_beam_status(DeviceCatalog.get_instance()))
+                except Exception as exc:  # noqa: BLE001 - surface catalog/read failure to the agent
+                    return mcp_error(f"beam check failed: {exc}")
 
             return run_on_main_thread(_run)
 

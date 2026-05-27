@@ -9,6 +9,8 @@ def test_metadata():
     assert agent.name == "reflection_alignment"
     assert agent.category == "operations"
     assert agent.description.strip()
+    assert agent.display_name == "Reflection Alignment"
+    assert agent.priority == 30
 
 
 def test_system_prompt_covers_devices_and_rules():
@@ -18,7 +20,7 @@ def test_system_prompt_covers_devices_and_rules():
         "sample_lift",
         "sample_rotate_steppertheta",
         "DetectorDiodeCurrent",
-        "500",
+        "500 nA",
         "half-cut",
         "rel_scan",
         "check_beam",
