@@ -57,3 +57,16 @@ def test_detector_no_signal_reference_content():
     ]:
         assert token in text, f"missing {token!r} in detector_no_signal.md"
     assert "propose" in text.lower(), "propose-before-write rule must be stated"
+
+
+def test_manifest_registers_support_agent():
+    from lucid_endstation_7011.manifest import manifest
+
+    entries = [p for p in manifest.plugins if p.name == "endstation_support"]
+    assert len(entries) == 1, "expected exactly one endstation_support entry"
+    entry = entries[0]
+    assert entry.type_name == "agent"
+    assert (
+        entry.import_path
+        == "lucid_endstation_7011.support.skill:EndstationSupportAgent"
+    )

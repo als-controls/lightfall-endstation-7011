@@ -5,6 +5,7 @@ Defines all LUCID plugins provided by this package:
 - Controller plugin for detector diodes
 - Agent plugin for the Blackfly observer skill (discover_blackfly_cameras + workflow prompt)
 - Agent plugin for the reflection-alignment skill (check_beam + fit_lift_halfcut + fit_theta_peak)
+- Agent plugin for the endstation user-support skill (detector-no-signal triage)
 """
 
 from lucid.plugins.manifest import PluginEntry, PluginManifest
@@ -40,6 +41,13 @@ manifest = PluginManifest(
             name="blackfly",
             import_path="lucid_endstation_7011.observers.blackfly.skill:BlackflyAgent",
             metadata={"priority": 30},
+        ),
+        # Agent plugin: beamline 7.0.1.1 user-support triage skill
+        PluginEntry(
+            type_name="agent",
+            name="endstation_support",
+            import_path="lucid_endstation_7011.support.skill:EndstationSupportAgent",
+            metadata={"priority": 20},
         ),
         # Agent plugin: reflection-geometry sample alignment skill
         PluginEntry(
