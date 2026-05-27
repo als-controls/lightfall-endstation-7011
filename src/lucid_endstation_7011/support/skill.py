@@ -49,9 +49,8 @@ class EndstationSupportAgent(AgentPlugin):
 ## Endstation 7.0.1.1 User-Support Skill
 
 Use this skill when a user at ALS beamline 7.0.1.1 reports an operational
-problem covered by the topics below. For the first topic, that is phrasing like
-"I can't see anything on the detector", "the detector is blank", or "no
-counts/signal on the CCD".
+problem covered by the topics below. Match the user's wording against the topic
+table, then follow that topic's reference file.
 
 ### Safety rules (apply to every topic)
 
