@@ -123,3 +123,35 @@ def test_select_xy_fields_empty_raises():
 
     with pytest.raises(RuntimeError):
         skill._select_xy_fields([])
+
+
+def test_convergence_status_not_converged():
+    res = skill._convergence_status(
+        [{"lift": 0.0, "theta": 0.0}, {"lift": 3.0, "theta": 0.1}]
+    )
+    assert res["converged"] is False
+    assert res["num_cycles"] == 2
+
+
+def test_convergence_status_converged_default():
+    cycles = [
+        {"lift": 0.0, "theta": 0.0},
+        {"lift": 3.0, "theta": 0.1},
+        {"lift": 5.0, "theta": 0.2},
+    ]
+    res = skill._convergence_status(cycles)
+    assert res["converged"] is True
+
+
+def test_convergence_status_accepts_pairs():
+    res = skill._convergence_status([[0.0, 0.0], [2.0, 0.1], [3.0, 0.2]])
+    assert res["converged"] is True
+
+
+def test_convergence_status_oscillation_not_converged():
+    cycles = [
+        {"lift": 0.0, "theta": 0.0},
+        {"lift": 50.0, "theta": 0.0},
+        {"lift": 0.0, "theta": 0.0},
+    ]
+    assert skill._convergence_status(cycles)["converged"] is False

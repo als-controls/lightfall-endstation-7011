@@ -26,18 +26,19 @@ def test_system_prompt_covers_devices_and_rules():
         "check_beam",
         "fit_lift_halfcut",
         "fit_theta_peak",
+        "check_convergence",
     ):
         assert token in body, f"prompt missing {token!r}"
 
 
-def test_exposes_three_mcp_tools():
+def test_exposes_mcp_tools():
     tools = ReflectionAlignmentAgent().create_tools()
     if not tools:
         import pytest
 
         pytest.skip("claude_agent_sdk not available")
     names = {getattr(t, "name", None) or getattr(t, "__name__", None) for t in tools}
-    assert names == {"check_beam", "fit_lift_halfcut", "fit_theta_peak"}
+    assert names == {"check_beam", "fit_lift_halfcut", "fit_theta_peak", "check_convergence"}
 
 
 def test_manifest_registers_reflection_alignment():

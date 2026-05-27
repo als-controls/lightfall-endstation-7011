@@ -12,6 +12,7 @@ from typing import Any
 from lucid.plugins.agent_plugin import AgentPlugin
 from lucid.utils.logging import logger
 
+from lucid_endstation_7011.alignment.convergence import ConvergenceTracker
 from lucid_endstation_7011.alignment.fitting import fit_falling_edge_halfcut, fit_peak
 
 DIODE_NAME = "DetectorDiodeCurrent"
@@ -132,6 +133,35 @@ def _fit_theta_from_uid(uid: str, x_field: str | None = None, y_field: str | Non
     }
 
 
+def _convergence_status(
+    cycles: list,
+    lift_tol: float = 10.0,
+    theta_tol: float = 0.25,
+    stable_required: int = 2,
+) -> dict:
+    """Decide whether the alignment loop has converged given the per-cycle
+    (lift, theta) history. Pure wrapper over ConvergenceTracker.
+
+    Each cycle may be a mapping with "lift"/"theta" keys or a [lift, theta] pair.
+    """
+    tracker = ConvergenceTracker(
+        lift_tol=lift_tol, theta_tol=theta_tol, stable_required=stable_required
+    )
+    for c in cycles:
+        if isinstance(c, dict):
+            tracker.record(c["lift"], c["theta"])
+        else:
+            tracker.record(c[0], c[1])
+    return {
+        "converged": tracker.converged,
+        "num_cycles": len(tracker.history),
+        "lift_tol": lift_tol,
+        "theta_tol": theta_tol,
+        "stable_required": stable_required,
+        "history": [{"lift": lift, "theta": theta} for (lift, theta) in tracker.history],
+    }
+
+
 class ReflectionAlignmentAgent(AgentPlugin):
     """Skill that drives reflection-geometry sample alignment.
 
@@ -187,6 +217,8 @@ which device to use before proceeding.
 - `fit_theta_peak(uid)` -> fits a peak to a theta scan; returns
   {detected, peak, ...}. When detected, move `sample_rotate_steppertheta`
   to `peak`.
+- `check_convergence(cycles)` -> {converged, ...}. Pass the full ordered list
+  of per-cycle {lift, theta} results; returns whether the loop has converged.
 
 ### Running scans
 All scans use the registered relative 1D scan plan `rel_scan_1d` via
@@ -216,11 +248,11 @@ names. After submitting, wait for the engine to go idle
 5. THETA: rel_scan_1d on `sample_rotate_steppertheta`, start -5, stop 5, 41
    points. Fit with `fit_theta_peak`; move theta to peak, or STOP if not
    detected.
-6. Record this cycle's (lift, theta) positions. Repeat steps 4 then 5, but on
-   every pass after the first fine lift tighten the lift scan to start -50,
-   stop 50, 21 points. Stop when both lift and theta change by no more than
-   10 microns / 0.25 degrees across two consecutive cycles (three cycles all
-   within tolerance). Cap the loop at 6 refinement cycles.
+6. Record this cycle's (lift, theta) positions. After each cycle, call
+   `check_convergence` with the full ordered list of recorded {lift, theta}
+   cycles and STOP when it returns converged=true. Otherwise repeat steps 4
+   then 5, but on every pass after the first fine lift tighten the lift scan to
+   start -50, stop 50, 21 points. Cap the loop at 6 refinement cycles.
 7. Report the final `sample_lift` and `sample_rotate_steppertheta` positions
    and the per-cycle history.
 
@@ -229,6 +261,8 @@ names. After submitting, wait for the engine to go idle
   tools; their `detected` flag is the decision.
 - On any failed fit (detected=false) or failed beam gate, STOP and return
   control to the operator. Do not auto-widen the range or silently continue.
+- Use `check_convergence` for the stop decision; do not judge convergence by
+  eye.
 """
 
     def create_tools(self) -> list[Any]:
@@ -331,4 +365,54 @@ names. After submitting, wait for the engine to go idle
 
             return run_on_main_thread(_run)
 
-        return [check_beam, fit_lift_halfcut, fit_theta_peak]
+        @tool(
+            name="check_convergence",
+            description=(
+                "Decide whether the alignment loop has converged. Pass `cycles` = the "
+                "ordered list of per-cycle results, each {\"lift\": microns, \"theta\": "
+                "degrees}. Returns {converged, num_cycles, ...}. Converged means lift and "
+                "theta each changed by <= 10 microns / 0.25 degrees across two consecutive "
+                "cycles (three cycles within tolerance). Use this for the stop decision; do "
+                "not judge convergence by eye."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "cycles": {
+                        "type": "array",
+                        "description": "Ordered per-cycle results, each {lift, theta}.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "lift": {"type": "number"},
+                                "theta": {"type": "number"},
+                            },
+                            "required": ["lift", "theta"],
+                        },
+                    },
+                    "lift_tol": {"type": "number", "description": "Lift tolerance, microns.", "default": 10.0},
+                    "theta_tol": {"type": "number", "description": "Theta tolerance, degrees.", "default": 0.25},
+                    "stable_required": {"type": "integer", "description": "Consecutive agreeing comparisons.", "default": 2},
+                },
+                "required": ["cycles"],
+            },
+        )
+        async def check_convergence(args: dict) -> dict[str, Any]:
+            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+
+            cycles = args.get("cycles")
+            if not cycles:
+                return mcp_error("cycles is required: the per-cycle (lift, theta) history")
+            try:
+                return mcp_result(
+                    _convergence_status(
+                        cycles,
+                        float(args.get("lift_tol", 10.0)),
+                        float(args.get("theta_tol", 0.25)),
+                        int(args.get("stable_required", 2)),
+                    )
+                )
+            except (KeyError, TypeError, ValueError, IndexError) as exc:
+                return mcp_error(f"convergence check failed: {exc}")
+
+        return [check_beam, fit_lift_halfcut, fit_theta_peak, check_convergence]
