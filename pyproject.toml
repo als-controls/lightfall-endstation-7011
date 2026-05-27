@@ -27,6 +27,7 @@ dependencies = [
     "lucid",  # For controller plugin base classes
     "lucid-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
     "numpy>=1.24",
+    "scipy>=1.10",
     "scrapbook>=0.5",
     "tiled[client]>=0.2.3",
 ]
