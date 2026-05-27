@@ -22,7 +22,7 @@ def test_system_prompt_covers_devices_and_rules():
         "DetectorDiodeCurrent",
         "500 nA",
         "half-cut",
-        "rel_scan",
+        "rel_scan_1d",
         "check_beam",
         "fit_lift_halfcut",
         "fit_theta_peak",

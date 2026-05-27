@@ -3,7 +3,7 @@
 Numerical decisions live in lucid_endstation_7011.alignment.fitting and
 .convergence (pure, unit-tested). This module contributes the procedure
 prompt and thin MCP tools that wrap those functions plus the existing
-DeviceCatalog / Tiled access. Scans reuse the registry plan ``rel_scan``.
+DeviceCatalog / Tiled access. Scans reuse the registry plan ``rel_scan_1d``.
 """
 from __future__ import annotations
 
@@ -188,6 +188,16 @@ which device to use before proceeding.
   {detected, peak, ...}. When detected, move `sample_rotate_steppertheta`
   to `peak`.
 
+### Running scans
+All scans use the registered relative 1D scan plan `rel_scan_1d` via
+`ncs_run_plan`. Before the first scan, call `ncs_list_plans` (category
+"scan") once to confirm the exact plan name and its parameter names; the
+number-of-points argument may be `num` or `num_points` depending on the
+registered version. Pass detectors=["DetectorDiodeCurrent"], the motor name,
+and the start/stop/points values below using the plan's actual parameter
+names. After submitting, wait for the engine to go idle
+(`ncs_get_run_status`), then get the run uid with `ncs_get_last_run`.
+
 ### Procedure
 1. PRE-FLIGHT (manual - ask the operator and WAIT for confirmation):
    a. Confirm the sample is roughly centered at the beam using the Blackfly
@@ -197,19 +207,18 @@ which device to use before proceeding.
 2. BEAM GATE: call `check_beam`. If beam_present is false, STOP, tell the
    operator, and call `ncs_get_beam_status` for ring/shutter context.
    Re-run this check before every scan.
-3. COARSE LIFT (run ONCE): `ncs_run_plan` plan_name "rel_scan" with
-   detectors=["DetectorDiodeCurrent"], the motor "sample_lift", start -500,
-   stop 500, num 21. Wait for the engine to go idle (`ncs_get_run_status`),
-   get the uid (`ncs_get_last_run`), call `fit_lift_halfcut(uid)`. If
-   detected, move `sample_lift` to halfcut. If NOT detected, STOP and hand
-   back to the operator (optionally `ncs_show_run` to display the scan).
-4. FINE LIFT: rel_scan on `sample_lift`, start -100, stop 100, num 21. Fit
-   with `fit_lift_halfcut`; move to halfcut, or STOP if not detected.
-5. THETA: rel_scan on `sample_rotate_steppertheta`, start -5, stop 5, num 41.
-   Fit with `fit_theta_peak`; move theta to peak, or STOP if not detected.
+3. COARSE LIFT (run ONCE): rel_scan_1d on `sample_lift`, start -500, stop
+   500, 21 points. Get the uid and call `fit_lift_halfcut(uid)`. If detected,
+   move `sample_lift` to halfcut. If NOT detected, STOP and hand back to the
+   operator (optionally `ncs_show_run` to display the scan).
+4. FINE LIFT: rel_scan_1d on `sample_lift`, start -100, stop 100, 21 points.
+   Fit with `fit_lift_halfcut`; move to halfcut, or STOP if not detected.
+5. THETA: rel_scan_1d on `sample_rotate_steppertheta`, start -5, stop 5, 41
+   points. Fit with `fit_theta_peak`; move theta to peak, or STOP if not
+   detected.
 6. Record this cycle's (lift, theta) positions. Repeat steps 4 then 5, but on
    every pass after the first fine lift tighten the lift scan to start -50,
-   stop 50, num 21. Stop when both lift and theta change by no more than
+   stop 50, 21 points. Stop when both lift and theta change by no more than
    10 microns / 0.25 degrees across two consecutive cycles (three cycles all
    within tolerance). Cap the loop at 6 refinement cycles.
 7. Report the final `sample_lift` and `sample_rotate_steppertheta` positions
