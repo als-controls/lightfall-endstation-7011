@@ -84,3 +84,69 @@ def fit_falling_edge_halfcut(x, y, *, k_noise: float = 5.0, r2_min: float = 0.9)
     if not (x.min() <= x0 <= x.max()):
         return EdgeFit(False, x0, baseline, floor, abs(w), r2, "edge outside scan range")
     return EdgeFit(True, x0, baseline, floor, abs(w), r2, "")
+
+
+# ---------------------------------------------------------------------------
+# Gaussian peak fit (rocking curve)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PeakFit:
+    """Result of a Gaussian peak fit (rocking curve)."""
+
+    detected: bool
+    position: float | None
+    amplitude: float | None
+    background: float | None
+    sigma: float | None
+    r2: float | None
+    reason: str = ""
+
+
+def _gaussian(x, bg, amp, x0, sigma):
+    return bg + amp * np.exp(-((x - x0) ** 2) / (2.0 * sigma ** 2))
+
+
+def fit_peak(x, y, *, k_noise: float = 5.0, r2_min: float = 0.9) -> PeakFit:
+    """Fit a Gaussian peak; return the peak center.
+
+    detected is True only when the amplitude clears ``k_noise`` * residual
+    noise, the fitted width is smaller than the scan span (a localized peak),
+    R^2 >= ``r2_min``, and the center sits inside the scan range.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if x.size < 4:
+        return PeakFit(False, None, None, None, None, None, "too few points")
+
+    bg0 = float(np.median(y))
+    imax = int(np.argmax(y))
+    x0_0 = float(x[imax])
+    amp0 = float(y[imax] - bg0)
+    span = float(x.max() - x.min())
+    sigma0 = max(span / 6.0, 1e-6)
+
+    try:
+        popt, _ = curve_fit(
+            _gaussian, x, y, p0=[bg0, amp0, x0_0, sigma0], maxfev=10000
+        )
+    except (RuntimeError, ValueError) as exc:
+        return PeakFit(False, None, None, None, None, None, f"fit did not converge: {exc}")
+
+    bg, amp, x0, sigma = (float(v) for v in popt)
+    resid = y - _gaussian(x, *popt)
+    r2 = _r_squared(y, resid)
+    noise = float(np.std(resid))
+
+    if not (np.isfinite(r2) and np.isfinite(noise) and np.isfinite(x0) and np.isfinite(sigma)):
+        return PeakFit(False, x0, amp, bg, abs(sigma), r2, "non-finite fit quality metrics")
+    if amp <= k_noise * noise:
+        return PeakFit(False, x0, amp, bg, abs(sigma), r2, "amplitude below noise threshold")
+    if abs(sigma) >= span:
+        return PeakFit(False, x0, amp, bg, abs(sigma), r2, "fitted width exceeds scan span (no localized peak)")
+    if r2 < r2_min:
+        return PeakFit(False, x0, amp, bg, abs(sigma), r2, f"poor fit (R2={r2:.3f}); peak may be near/outside scan range or too noisy")
+    if not (x.min() <= x0 <= x.max()):
+        return PeakFit(False, x0, amp, bg, abs(sigma), r2, "peak outside scan range")
+    return PeakFit(True, x0, amp, bg, abs(sigma), r2, "")
