@@ -70,3 +70,4 @@ def test_manifest_registers_support_agent():
         entry.import_path
         == "lucid_endstation_7011.support.skill:EndstationSupportAgent"
     )
+    assert entry.metadata.get("priority") == 20

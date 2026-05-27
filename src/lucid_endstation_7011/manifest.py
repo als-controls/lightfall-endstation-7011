@@ -42,7 +42,7 @@ manifest = PluginManifest(
             import_path="lucid_endstation_7011.observers.blackfly.skill:BlackflyAgent",
             metadata={"priority": 30},
         ),
-        # Agent plugin: beamline 7.0.1.1 user-support triage skill
+        # Agent plugin: endstation user-support triage skill
         PluginEntry(
             type_name="agent",
             name="endstation_support",
