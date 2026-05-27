@@ -38,3 +38,14 @@ def test_exposes_three_mcp_tools():
         pytest.skip("claude_agent_sdk not available")
     names = {getattr(t, "name", None) or getattr(t, "__name__", None) for t in tools}
     assert names == {"check_beam", "fit_lift_halfcut", "fit_theta_peak"}
+
+
+def test_manifest_registers_reflection_alignment():
+    from lucid_endstation_7011.manifest import manifest
+
+    entry = next((p for p in manifest.plugins if p.name == "reflection_alignment"), None)
+    assert entry is not None, "reflection_alignment not registered in manifest"
+    assert entry.type_name == "agent"
+    assert entry.import_path == (
+        "lucid_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
+    )
