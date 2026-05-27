@@ -27,3 +27,31 @@ def test_support_agent_system_prompt_is_a_router():
     assert "references/detector_no_signal.md" in body
     # The tool inventory must name the beam-status tool used in step 1.
     assert "ncs_get_beam_status" in body
+
+
+def test_support_agent_references_dir_resolves():
+    refs = EndstationSupportAgent().get_references_dir()
+    assert refs is not None
+    assert refs.is_dir()
+    assert (refs / "detector_no_signal.md").is_file()
+
+
+def test_detector_no_signal_reference_content():
+    """Tripwire: the procedure must keep its key PVs/values and the
+    propose-before-write rule, so an edit can't silently gut it."""
+    refs = EndstationSupportAgent().get_references_dir()
+    assert refs is not None
+    text = (refs / "detector_no_signal.md").read_text(encoding="utf-8")
+    for token in [
+        "13PICAM1:cam1:ShutterTimingMode",
+        "BL7ANDOR1:cam1:AndorShutterMode",
+        "Acquire",
+        "DIAG111",
+        "CAL111",
+        "DIAG101",
+        "PinholeX",
+        "PinholeY",
+        "ncs_get_beam_status",
+    ]:
+        assert token in text, f"missing {token!r} in detector_no_signal.md"
+    assert "propose" in text.lower(), "propose-before-write rule must be stated"
