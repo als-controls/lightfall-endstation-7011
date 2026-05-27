@@ -52,7 +52,7 @@ wrong, propose setting it to the expected value and set on OK. If it is not
 reachable via the catalog, ask the user to set it in Phoebus (cite the PV and
 expected value).
 
-## Step 5 — Is it acquiring? (CONFIRM)
+## Step 5 — Is it acquiring? (CONFIRM, else MANUAL)
 
 Ensure the camera is acquiring: `13PICAM1:cam1:Acquire` (PICAM) or
 `BL7ANDOR1:cam1:Acquire` (ANDOR) = `1`. Propose starting acquisition and set on
@@ -60,11 +60,17 @@ OK, or ask the user to start it in Phoebus.
 
 ## Step 6 — Is a diagnostic blocking the beam? (AUTO where catalog-resolvable, else MANUAL)
 
-- `DIAG111` position = 0 mm (motor readback).
-- `CAL111` = 60 mm (motor readback).
-- `DIAG101` = 0 mm (motor readback).
+The values below are the nominal positions for a clear beampath. A reading that
+differs means that component may be intercepting the beam — confirm with the
+user before concluding it is the cause.
+
+- `DIAG111` position = 0 mm — motor readback (AUTO).
+- `CAL111` = 60 mm — motor readback (AUTO).
+- `DIAG101` = 0 mm — motor readback (AUTO).
 - Manual YAG before `M112` rotated **out** of the beampath (MANUAL — physical).
-- `DIAG111` is **out** [manual switch] (MANUAL).
+- `DIAG111` physically retracted — confirm via its manual insertion switch
+  (MANUAL). This is a second, independent indicator of the same `DIAG111`
+  diagnostic; if it disagrees with the 0 mm readback above, ask the user.
 
 Read the motor positions via the catalog where possible; ask the user for the
 manual switch and YAG state.

@@ -41,11 +41,13 @@ def test_detector_no_signal_reference_content():
     propose-before-write rule, so an edit can't silently gut it."""
     refs = EndstationSupportAgent().get_references_dir()
     assert refs is not None
-    text = (refs / "detector_no_signal.md").read_text(encoding="utf-8")
+    doc = refs / "detector_no_signal.md"
+    assert doc.is_file()
+    text = doc.read_text(encoding="utf-8")
     for token in [
         "13PICAM1:cam1:ShutterTimingMode",
         "BL7ANDOR1:cam1:AndorShutterMode",
-        "Acquire",
+        "cam1:Acquire",
         "DIAG111",
         "CAL111",
         "DIAG101",
