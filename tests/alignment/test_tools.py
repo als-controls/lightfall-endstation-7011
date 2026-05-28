@@ -155,3 +155,156 @@ def test_convergence_status_oscillation_not_converged():
         {"lift": 0.0, "theta": 0.0},
     ]
     assert skill._convergence_status(cycles)["converged"] is False
+
+
+# ---------------------------------------------------------------------------
+# Issue 4: _select_xy_fields must pick the scanned motor when multiple
+# motors are present in a per-step plan. The original silent failure was
+# picking sample_rotate_steppertheta (constant) over sample_lift (the
+# actually-scanned axis) and reporting halfcut = -2.4° with R²≈0.
+# ---------------------------------------------------------------------------
+
+
+def test_select_xy_fields_picks_largest_variance_column():
+    cols = ["sample_rotate_steppertheta", "sample_lift", "DetectorDiodeCurrent"]
+    # sample_lift varies; theta is constant. Without an x_field, the picker
+    # should choose sample_lift (largest variance) over theta.
+    x_data = {
+        "sample_rotate_steppertheta": np.zeros(21),
+        "sample_lift": np.linspace(-100, 100, 21),
+        "DetectorDiodeCurrent": np.linspace(15000, 500, 21),
+    }
+    xf, yf = skill._select_xy_fields(cols, x_data=x_data)
+    assert yf == "DetectorDiodeCurrent"
+    assert xf == "sample_lift", (
+        f"variance heuristic picked {xf}; expected sample_lift"
+    )
+
+
+def test_select_xy_fields_substring_match_for_x_field():
+    # When a per-step plan records a readback rather than the bare device
+    # name, x_field='sample_lift' should still match 'sample_lift_user_setpoint'.
+    cols = ["sample_lift_user_setpoint", "sample_rotate_steppertheta", "DetectorDiodeCurrent"]
+    xf, yf = skill._select_xy_fields(cols, x_field="sample_lift")
+    assert yf == "DetectorDiodeCurrent"
+    assert xf == "sample_lift_user_setpoint"
+
+
+def test_fit_lift_from_uid_defaults_x_field_to_lift_motor(monkeypatch):
+    """Issue 4 in skill.py: when x_field is None, the wrapper must request
+    the sample_lift column (not the first non-y column from a multi-motor
+    per-step plan)."""
+    captured: dict[str, str | None] = {"xf": None, "yf": None}
+
+    def fake_read(uid, xf, yf):
+        captured["xf"], captured["yf"] = xf, yf
+        x = np.linspace(-100, 100, 21)
+        y = _falling_edge(x, floor=500.0, baseline=15000.0, x0=10.0, w=20.0)
+        return x, y
+
+    monkeypatch.setattr(skill, "_read_scan_xy", fake_read)
+    skill._fit_lift_from_uid("uid-x")
+    assert captured["xf"] == "sample_lift"
+    assert captured["yf"] == "DetectorDiodeCurrent"
+
+
+def test_fit_theta_from_uid_exposes_method_and_boundary(monkeypatch):
+    """Issue 5 + 6 (skill surface): the response must include method and
+    peak_at_boundary so the agent can decide whether to widen the scan."""
+    x = np.linspace(-5, 5, 41)
+    y = _gaussian(x, bg=500.0, amp=12000.0, x0=0.8, sigma=1.0)
+    monkeypatch.setattr(skill, "_read_scan_xy", lambda uid, xf, yf: (x, y))
+    res = skill._fit_theta_from_uid("uid-3")
+    assert res["detected"] is True
+    assert "method" in res
+    assert res["method"] in {
+        "gaussian", "voigt", "asymmetric_gaussian", "centroid_topN", "argmax",
+    }
+    assert "peak_at_boundary" in res
+    assert res["peak_at_boundary"] is False
+
+
+def test_fit_theta_from_uid_flags_boundary_peak(monkeypatch):
+    rng = np.random.default_rng(11)
+    # Peak just outside the left edge — the scan should NOT result in a
+    # confident "detected" with a numeric peak; peak_at_boundary must be True.
+    x = np.linspace(-2.0, 8.0, 41)
+    y = 500.0 + 12000.0 * np.exp(-((x - (-2.4)) ** 2) / (2.0 * 1.0 ** 2)) + rng.normal(0, 30, x.size)
+    monkeypatch.setattr(skill, "_read_scan_xy", lambda uid, xf, yf: (x, y))
+    res = skill._fit_theta_from_uid("uid-edge")
+    assert res["peak_at_boundary"] is True
+    assert res["detected"] is False
+
+
+# ---------------------------------------------------------------------------
+# Issue 1: _beam_status response carries the canonical detector name so the
+# agent can route every alignment scan to the same device.
+# ---------------------------------------------------------------------------
+
+
+def test_beam_status_includes_canonical_detector_name():
+    cat = _FakeCatalog({"DetectorDiodeCurrent": _diode(15000.0)})
+    res = skill._beam_status(cat)
+    assert res["detector"] == "DetectorDiodeCurrent"
+
+
+def test_beam_status_error_still_reports_detector():
+    cat = _FakeCatalog({})  # missing diode
+    res = skill._beam_status(cat)
+    assert res["success"] is False
+    assert res["detector"] == "DetectorDiodeCurrent"
+
+
+# ---------------------------------------------------------------------------
+# Issue 10: plot tools must run headless (Agg backend) and return a fit
+# summary. We don't assert on pixel content; just that the helper doesn't
+# crash and that the summary dict has the keys the agent expects.
+# ---------------------------------------------------------------------------
+
+
+def test_plot_alignment_scan_lift_returns_summary(monkeypatch):
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+
+    x = np.linspace(-100, 100, 21)
+    y = _falling_edge(x, floor=500.0, baseline=15000.0, x0=15.0, w=20.0)
+    monkeypatch.setattr(skill, "_read_scan_xy", lambda uid, xf, yf: (x, y))
+    summary = skill._plot_alignment_scan_impl("uid-lift", kind="lift")
+    assert summary["kind"] == "lift"
+    assert summary["motor"] == "sample_lift"
+    assert summary["detected"] is True
+    assert abs(summary["position"] - 15.0) < 10.0
+
+
+def test_plot_alignment_scan_theta_returns_summary(monkeypatch):
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+
+    x = np.linspace(-5, 5, 41)
+    y = _gaussian(x, bg=500.0, amp=12000.0, x0=0.5, sigma=1.0)
+    monkeypatch.setattr(skill, "_read_scan_xy", lambda uid, xf, yf: (x, y))
+    summary = skill._plot_alignment_scan_impl("uid-theta", kind="theta")
+    assert summary["kind"] == "theta"
+    assert summary["motor"] == "sample_rotate_steppertheta"
+    assert summary["detected"] is True
+    assert "method" in summary
+    assert "peak_at_boundary" in summary
+
+
+def test_plot_convergence_returns_summary():
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+
+    cycles = [
+        {"lift": 0.0, "theta": 0.0},
+        {"lift": 8.0, "theta": 0.1},
+        {"lift": 12.0, "theta": 0.18},
+    ]
+    res = skill._plot_convergence_impl(cycles, lift_tol=10.0, theta_tol=0.25)
+    assert res["num_cycles"] == 3
+    assert res["lift_tol"] == 10.0
+    assert res["theta_tol"] == 0.25
+    assert len(res["history"]) == 3
