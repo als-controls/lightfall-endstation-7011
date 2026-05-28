@@ -28,6 +28,19 @@ THETA_MOTOR = "sample_rotate_steppertheta"
 COUPLED_HOLD_MOTOR = "sample_translate"
 BEAM_THRESHOLD_NA = 500.0
 
+# Columns that come from Bluesky's event document framing rather than a
+# device's .read() value. Excluding them keeps the variance-based x-field
+# picker from latching onto `time` (epoch seconds, var ~ scan_duration^2)
+# when the actual motor column has a name that doesn't match the catalog
+# name we asked for. See the comment on _select_xy_fields below.
+_EVENT_METADATA_COLS = frozenset({"time", "seq_num", "uid"})
+
+
+def _is_event_metadata_col(name: str) -> bool:
+    """True if `name` is a Bluesky-framing column, not a device data key."""
+    s = str(name)
+    return s.startswith("ts_") or s in _EVENT_METADATA_COLS
+
 
 def _extract_scalar(reading: dict) -> float | None:
     """Pull the first numeric value out of an ophyd ``.read()`` mapping."""
@@ -115,9 +128,13 @@ def _select_xy_fields(
     if xf is None and x_data is not None:
         import numpy as _np
 
+        # Exclude Bluesky event-framing columns from the variance pick. For
+        # a 40-second theta scan `time` has var ~ 140 sec² while the motor
+        # (10° span) has var ~ 8 deg² — pure variance would silently pick
+        # `time` and the downstream fit would operate on epoch values.
         ranked: list[tuple[float, str]] = []
         for c in cols:
-            if c == yf:
+            if c == yf or _is_event_metadata_col(c):
                 continue
             try:
                 arr = _np.asarray(x_data[c], dtype=float)
@@ -130,7 +147,9 @@ def _select_xy_fields(
             xf = ranked[0][1]
 
     if xf is None:
-        xf = next((c for c in cols if c != yf), None)
+        # Last-resort: first non-y column that is NOT event framing. We
+        # would rather raise than return `time` as the x axis.
+        xf = next((c for c in cols if c != yf and not _is_event_metadata_col(c)), None)
 
     if xf is None or xf == yf:
         raise RuntimeError(
@@ -161,7 +180,10 @@ def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = No
     if events is None:
         raise RuntimeError("no readable data in primary stream")
 
-    cols = [c for c in events.keys() if not str(c).startswith("ts_")]
+    # Drop event-framing columns (ts_*, time, seq_num, uid) before column
+    # selection. They were the source of the "peak at 1.7e9" plot bug:
+    # `time` has higher variance than a 10° theta motor over a 40-s scan.
+    cols = [c for c in events.keys() if not _is_event_metadata_col(c)]
     xf, yf = _select_xy_fields(cols, x_field, y_field, x_data=events)
 
     x = np.asarray(events[xf], dtype=float)
@@ -253,16 +275,13 @@ def _plot_alignment_scan_impl(
     ``kind`` is "lift", "theta", or "auto" (infer from the motor column
     name). Returns a small dict with the fit summary; the matplotlib window
     is opened via ``plt.show(block=False)``.
-    """
-    import matplotlib
 
-    # Use the Qt backend when LUCID hosts the session so the window is
-    # interactive and lives alongside the dashboard; fall back to "Agg"
-    # only when no display is available (tests, headless CI).
-    try:
-        matplotlib.use("QtAgg", force=False)
-    except Exception:
-        pass
+    Backend handling: we deliberately don't call ``matplotlib.use(...)``
+    here. LUCID sets the interactive backend (QtAgg via PySide6) at
+    startup; tests pin Agg via ``matplotlib.use("Agg", force=True)`` before
+    invoking this helper. Forcing a switch at call time would override
+    the test setup and crash pyplot when no display is available.
+    """
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -350,13 +369,11 @@ def _plot_alignment_scan_impl(
 
 
 def _plot_convergence_impl(cycles: list, *, lift_tol: float = 10.0, theta_tol: float = 0.25) -> dict:
-    """Plot lift and theta vs cycle index with tolerance bands."""
-    import matplotlib
+    """Plot lift and theta vs cycle index with tolerance bands.
 
-    try:
-        matplotlib.use("QtAgg", force=False)
-    except Exception:
-        pass
+    See ``_plot_alignment_scan_impl`` for why we don't ``matplotlib.use``
+    here — the backend is chosen by the host (LUCID or pytest).
+    """
     import matplotlib.pyplot as plt
 
     pairs = []

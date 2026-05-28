@@ -293,6 +293,43 @@ def test_plot_alignment_scan_theta_returns_summary(monkeypatch):
     assert "peak_at_boundary" in summary
 
 
+def test_select_xy_fields_skips_event_metadata_in_variance():
+    """A Bluesky V3 event stream includes ``time`` (epoch seconds) and
+    ``seq_num`` alongside device columns. The variance-based picker must
+    skip these — otherwise a 40-second theta scan picks ``time`` (var
+    ~140) over the motor (10° span, var ~8) and downstream fits operate
+    on epoch values, producing peak positions like 1.7e9.
+    """
+    events = {
+        "time": np.linspace(1.7e9, 1.7e9 + 40.0, 41),
+        "seq_num": np.arange(1, 42, dtype=float),
+        # The motor column under a name that won't match x_field via
+        # exact or substring search — forces the variance fallback.
+        "rotation_stage_angle": np.linspace(-5.0, 5.0, 41),
+        "DetectorDiodeCurrent": 500.0
+        + 12000.0 * np.exp(-((np.linspace(-5, 5, 41) - 0.5) ** 2) / 2.0),
+    }
+    cols = list(events.keys())
+    xf, yf = skill._select_xy_fields(
+        cols,
+        x_field="sample_rotate_steppertheta",  # no exact / substring match
+        y_field="DetectorDiodeCurrent",
+        x_data=events,
+    )
+    assert xf == "rotation_stage_angle", (
+        f"variance fallback picked {xf!r}; metadata column should have been skipped"
+    )
+
+
+def test_is_event_metadata_col_classifications():
+    assert skill._is_event_metadata_col("time")
+    assert skill._is_event_metadata_col("seq_num")
+    assert skill._is_event_metadata_col("uid")
+    assert skill._is_event_metadata_col("ts_sample_lift")
+    assert not skill._is_event_metadata_col("sample_lift")
+    assert not skill._is_event_metadata_col("DetectorDiodeCurrent")
+
+
 def test_plot_convergence_returns_summary():
     import matplotlib
 
