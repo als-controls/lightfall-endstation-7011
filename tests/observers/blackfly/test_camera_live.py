@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import pytest
-from lucid_endstation_7011.observers.blackfly.camera import BlackflyCamera
+from lightfall_endstation_7011.observers.blackfly.camera import BlackflyCamera
 
 
 @pytest.mark.hw
@@ -24,7 +24,7 @@ def test_heartbeat_keeps_ccp(camera_ip):
     with BlackflyCamera(camera_ip, bind_ip, heartbeat_timeout_ms=2000) as cam:
         time.sleep(5)  # > heartbeat_timeout; should still be alive
         # verify by reading a register
-        from lucid_endstation_7011.observers.blackfly import registers
+        from lightfall_endstation_7011.observers.blackfly import registers
         ccp = cam._client.read_register(registers.REG_CCP)
         assert (ccp & registers.CCP_CONTROL) != 0, f"CCP lost after heartbeat window, got 0x{ccp:08x}"
 

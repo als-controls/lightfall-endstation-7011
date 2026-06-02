@@ -1,6 +1,6 @@
 """ReflectionAlignmentAgent: drive reflection-geometry sample alignment.
 
-Numerical decisions live in lucid_endstation_7011.alignment.fitting and
+Numerical decisions live in lightfall_endstation_7011.alignment.fitting and
 .convergence (pure, unit-tested). This module contributes the procedure
 prompt and thin MCP tools that wrap those functions plus the existing
 DeviceCatalog / Tiled access. Scans reuse the registry plan ``rel_scan_1d``.
@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from lucid.plugins.agent_plugin import AgentPlugin
-from lucid.utils.logging import logger
+from lightfall.plugins.agent_plugin import AgentPlugin
+from lightfall.utils.logging import logger
 
-from lucid_endstation_7011.alignment.convergence import ConvergenceTracker
-from lucid_endstation_7011.alignment.fitting import fit_falling_edge_halfcut, fit_peak
+from lightfall_endstation_7011.alignment.convergence import ConvergenceTracker
+from lightfall_endstation_7011.alignment.fitting import fit_falling_edge_halfcut, fit_peak
 
 DIODE_NAME = "DetectorDiodeCurrent"
 LIFT_MOTOR = "sample_lift"
@@ -84,8 +84,8 @@ def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = No
     non-diode, non-timestamp column). Raises RuntimeError on missing data.
     """
     import numpy as np
-    from lucid.services.tiled_service import TiledService
-    from lucid.utils.tiled_helpers import read_events
+    from lightfall.services.tiled_service import TiledService
+    from lightfall.utils.tiled_helpers import read_events
 
     service = TiledService.get_instance()
     if not service.is_connected or service._client is None:
@@ -168,7 +168,7 @@ class ReflectionAlignmentAgent(AgentPlugin):
     Teaches the embedded agent the knife-edge (lift) + rocking-curve (theta)
     procedure and contributes three MCP tools: check_beam, fit_lift_halfcut,
     fit_theta_peak. Scans, run polling, run-data display, and motor moves all
-    reuse existing LUCID acquisition tools.
+    reuse existing Lightfall acquisition tools.
     """
 
     @property
@@ -281,12 +281,12 @@ names. After submitting, wait for the engine to go idle
             input_schema={"type": "object", "properties": {}},
         )
         async def check_beam(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.devices import DeviceCatalog
-            from lucid.plugins.agents._mcp_helpers import mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.devices import DeviceCatalog
+            from lightfall.plugins.agents._mcp_helpers import mcp_result
 
             def _run():
-                from lucid.plugins.agents._mcp_helpers import mcp_error
+                from lightfall.plugins.agents._mcp_helpers import mcp_error
 
                 try:
                     return mcp_result(_beam_status(DeviceCatalog.get_instance()))
@@ -313,8 +313,8 @@ names. After submitting, wait for the engine to go idle
             },
         )
         async def fit_lift_halfcut(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             uid = args.get("uid")
             if not uid:
@@ -348,8 +348,8 @@ names. After submitting, wait for the engine to go idle
             },
         )
         async def fit_theta_peak(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             uid = args.get("uid")
             if not uid:
@@ -398,7 +398,7 @@ names. After submitting, wait for the engine to go idle
             },
         )
         async def check_convergence(args: dict) -> dict[str, Any]:
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             cycles = args.get("cycles")
             if not cycles:

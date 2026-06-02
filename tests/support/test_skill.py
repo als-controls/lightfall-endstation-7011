@@ -1,7 +1,7 @@
 """Smoke tests for the EndstationSupportAgent skill."""
 from __future__ import annotations
 
-from lucid_endstation_7011.support.skill import EndstationSupportAgent
+from lightfall_endstation_7011.support.skill import EndstationSupportAgent
 
 
 def test_support_agent_metadata():
@@ -60,7 +60,7 @@ def test_detector_no_signal_reference_content():
 
 
 def test_manifest_registers_support_agent():
-    from lucid_endstation_7011.manifest import manifest
+    from lightfall_endstation_7011.manifest import manifest
 
     entries = [p for p in manifest.plugins if p.name == "endstation_support"]
     assert len(entries) == 1, "expected exactly one endstation_support entry"
@@ -68,6 +68,6 @@ def test_manifest_registers_support_agent():
     assert entry.type_name == "agent"
     assert (
         entry.import_path
-        == "lucid_endstation_7011.support.skill:EndstationSupportAgent"
+        == "lightfall_endstation_7011.support.skill:EndstationSupportAgent"
     )
     assert entry.metadata.get("priority") == 20

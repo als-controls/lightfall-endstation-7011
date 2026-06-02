@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-26
 **Status:** Approved (design); pending implementation plan
-**Repos touched:** `lucid-endstation-7011` (primary), `ncs/ncs` (one small core tool)
+**Repos touched:** `lightfall-endstation-7011` (primary), `ncs/ncs` (one small core tool)
 
 ## Problem
 
@@ -69,11 +69,11 @@ the system prompt.
 
 Numerical truth lives in pure, unit-tested functions. Sequencing,
 human checkpoints, and hardware I/O live in the agent, which calls thin MCP
-tools that wrap the pure core and the existing LUCID run/data/move
+tools that wrap the pure core and the existing Lightfall run/data/move
 infrastructure.
 
 ```
-src/lucid_endstation_7011/alignment/
+src/lightfall_endstation_7011/alignment/
   __init__.py
   fitting.py        # pure: fit_falling_edge_halfcut(x, y) -> EdgeFit
                     #       fit_peak(x, y)               -> PeakFit
@@ -93,7 +93,7 @@ A new manifest entry registers the agent:
 PluginEntry(
     type_name="agent",
     name="reflection_alignment",
-    import_path="lucid_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
+    import_path="lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
     metadata={"priority": 30},
 )
 ```
@@ -101,7 +101,7 @@ PluginEntry(
 ### D1 — core tool (ncs/ncs): `ncs_get_beam_status`
 
 A thin MCP tool wrapping the already-existing
-`lucid.services.als_beam_status.ALSBeamStatusService`, which polls
+`lightfall.services.als_beam_status.ALSBeamStatusService`, which polls
 `https://controls.als.lbl.gov/als-beamstatus/curvals` and already exposes a
 `get_introspection_data()` method built for exactly this. The tool:
 
@@ -112,7 +112,7 @@ A thin MCP tool wrapping the already-existing
   connection/error state).
 
 Added to the existing `EngineToolsAgent` in
-`lucid/plugins/agents/engine_tools.py` (acquisition category). No new plugin
+`lightfall/plugins/agents/engine_tools.py` (acquisition category). No new plugin
 registration. Generally useful beyond alignment; the alignment skill uses it
 to explain *why* a beam gate failed (ring dump vs shutter closed vs
 mis-centering).
@@ -233,7 +233,7 @@ optionally calling `ncs_show_run` so the operator can eyeball the scan.
 
 ## Dependencies
 
-- Add `scipy>=1.10` to `lucid-endstation-7011` runtime dependencies (used by
+- Add `scipy>=1.10` to `lightfall-endstation-7011` runtime dependencies (used by
   `fitting.py` for `curve_fit`; `scipy.special.erf` for the edge model).
 
 ## Out of scope

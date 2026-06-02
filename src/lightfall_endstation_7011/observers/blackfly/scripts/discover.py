@@ -8,8 +8,8 @@ import argparse
 import socket
 import sys
 
-from lucid_endstation_7011.observers.blackfly import gvcp
-from lucid_endstation_7011.observers.blackfly.discovery import discover
+from lightfall_endstation_7011.observers.blackfly import gvcp
+from lightfall_endstation_7011.observers.blackfly.discovery import discover
 
 
 def _default_bind_ip() -> str:

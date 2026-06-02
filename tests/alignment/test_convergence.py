@@ -1,7 +1,7 @@
 """Tests for the convergence tracker."""
 from __future__ import annotations
 
-from lucid_endstation_7011.alignment.convergence import ConvergenceTracker
+from lightfall_endstation_7011.alignment.convergence import ConvergenceTracker
 
 
 def test_requires_three_cycles_to_converge_by_default():

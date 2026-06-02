@@ -8,9 +8,9 @@ this doc tracks what's done, what's left, and how to pick it back up.
 
 | Repo | Branch / HEAD | What's there |
 |---|---|---|
-| `lucid-pipelines` | `master` @ `4783d96` | SDK + executor + papermill runner + env_cache (kernel-registration fix landed). 35/35 tests pass. **Not pushed.** |
-| `lucid-endstation-7011` | `master` @ `693d89a` | This: `VariancePipeline` + `compute_variance.ipynb` + 5 unit tests. **Not pushed.** |
-| `ncs/ncs` (LUCID) | `master` @ `8d0ea09` | Wire-up MR !14 merged (jobs/triggers panels, `PipelineClient`, dialogs); T18 e2e scaffolding. **Not pushed.** MR !14 still open upstream until master gets pushed. |
+| `lightfall-pipelines` | `master` @ `4783d96` | SDK + executor + papermill runner + env_cache (kernel-registration fix landed). 35/35 tests pass. **Not pushed.** |
+| `lightfall-endstation-7011` | `master` @ `693d89a` | This: `VariancePipeline` + `compute_variance.ipynb` + 5 unit tests. **Not pushed.** |
+| `ncs/ncs` (Lightfall) | `master` @ `8d0ea09` | Wire-up MR !14 merged (jobs/triggers panels, `PipelineClient`, dialogs); T18 e2e scaffolding. **Not pushed.** MR !14 still open upstream until master gets pushed. |
 | `als-tiled` | `origin/master` | Mint endpoint + role-bootstrap + identity fix all deployed to bcgtiled. **MR !3 (`TILED_EXTRA_RW_PATHS`) open**, not yet merged or deployed. |
 
 The auth-v2 chain (Keycloak → mint Tiled apikey → embed in NATS
@@ -21,7 +21,7 @@ the `/data` ReadWritePaths in place (live-SQL until MR !3 redeploys).
 Memory entries with the full historical context:
 - `project_notebook_pipelines_status.md` — Stage 1-4 timeline, plan-drift
   corrections, deferred items.
-- `project_lucid_auth_v2.md` — auth-v2 rollout, hotfixes #1-#6.
+- `project_lightfall_auth_v2.md` — auth-v2 rollout, hotfixes #1-#6.
 
 ## What to do next, in priority order
 
@@ -33,15 +33,15 @@ has never been executed for real. Structural code is in place but
 the first run will surface 2-3 small issues. Prep:
 
 ```powershell
-~/PycharmProjects/lucid-pipelines/.venv/Scripts/pip install ipykernel
-$env:LUCID_INTEGRATION = "1"
+~/PycharmProjects/lightfall-pipelines/.venv/Scripts/pip install ipykernel
+$env:Lightfall_INTEGRATION = "1"
 cd ~/PycharmProjects/ncs/ncs
 .venv/Scripts/python -m pytest tests/integration/test_pipelines_e2e.py -v -s
 ```
 
 `-s` is important on first run so the Keycloak device-flow URL prints
 to your terminal. The 7-day apikey is cached at
-`~/.cache/lucid-pipelines/integration-key.json`; subsequent runs within
+`~/.cache/lightfall-pipelines/integration-key.json`; subsequent runs within
 the week skip the prompt.
 
 Expected hiccups:
@@ -54,9 +54,9 @@ Expected hiccups:
 
 ### 2. Lucid-pipelines deploy story
 
-No `deploy/setup.sh` for `lucid-pipelines` yet, so no beamline can run
+No `deploy/setup.sh` for `lightfall-pipelines` yet, so no beamline can run
 the executor as a systemd service. Mirror als-tiled's pattern:
-`/opt/lucid-pipelines` install, systemd unit pointing at the beamline's
+`/opt/lightfall-pipelines` install, systemd unit pointing at the beamline's
 NATS URL, configured `--notebook-store` and `--env-cache` paths,
 ExecStartPre if any reconciliation is needed. Without this, the
 variance plugin sits at the bench but doesn't actually run on hardware.
@@ -64,8 +64,8 @@ variance plugin sits at the bench but doesn't actually run on hardware.
 ### 3. Deploy variance on a 7011 host
 
 Pick a 7011 VM (with bluesky / RunEngine running), install
-`lucid-pipelines` + this package, run the executor as a service, fire
-the variance pipeline on a real run via LUCID's "Run pipeline..."
+`lightfall-pipelines` + this package, run the executor as a service, fire
+the variance pipeline on a real run via Lightfall's "Run pipeline..."
 context menu in the Tiled browser. This is the highest-signal test of
 feature readiness — the synthetic-data unit tests don't catch
 schema-shape mismatches against bluesky V3 events.
@@ -88,14 +88,14 @@ the other can be deleted.
 
 ```powershell
 cd ~/PycharmProjects/ncs/ncs;             git push upstream master
-cd ~/PycharmProjects/lucid-pipelines;     git push origin master
-cd ~/PycharmProjects/ncs/lucid-endstation-7011; git push origin master
+cd ~/PycharmProjects/lightfall-pipelines;     git push origin master
+cd ~/PycharmProjects/ncs/lightfall-endstation-7011; git push origin master
 cd ~/PycharmProjects/als-tiled;           # review MR !3, merge, redeploy bcgtiled
 ```
 
 Pushing ncs/ncs master auto-closes MR !14.
 
-## Known gaps in lucid-pipelines
+## Known gaps in lightfall-pipelines
 
 ### Install-from-local-source
 
@@ -103,7 +103,7 @@ Pushing ncs/ncs master auto-closes MR !14.
 plugin is on PyPI. For T18 and for any non-published beamline plugin
 this fails. The T18 fixture works around it by pre-seeding the
 env_cache directory by hand. The proper fix is a
-`LUCID_PIPELINES_LOCAL_PLUGINS` env var (or `--plugin-source
+`Lightfall_PIPELINES_LOCAL_PLUGINS` env var (or `--plugin-source
 pkg=/path/to/source` CLI arg) that lets `env_cache` pip-install from a
 directory when the package isn't on PyPI. Until that lands, every
 beamline plugin needs to be on PyPI or have a published wheel.

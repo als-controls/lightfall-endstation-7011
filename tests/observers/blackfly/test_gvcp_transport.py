@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from lucid_endstation_7011.observers.blackfly import gvcp
-from lucid_endstation_7011.observers.blackfly.gvcp_transport import GvcpClient, GvcpError
+from lightfall_endstation_7011.observers.blackfly import gvcp
+from lightfall_endstation_7011.observers.blackfly.gvcp_transport import GvcpClient, GvcpError
 
 
 @pytest.fixture

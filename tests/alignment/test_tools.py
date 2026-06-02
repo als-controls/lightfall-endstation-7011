@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import erf
 
-from lucid_endstation_7011.alignment import skill
+from lightfall_endstation_7011.alignment import skill
 
 
 class _FakeOphyd:

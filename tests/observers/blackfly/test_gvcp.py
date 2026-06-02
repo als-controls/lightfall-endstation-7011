@@ -2,7 +2,7 @@ import struct
 
 import pytest
 
-from lucid_endstation_7011.observers.blackfly import gvcp
+from lightfall_endstation_7011.observers.blackfly import gvcp
 
 
 def test_build_discovery_cmd():

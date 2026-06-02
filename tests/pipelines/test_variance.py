@@ -12,14 +12,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from lucid_endstation_7011.pipelines import VariancePipeline
+from lightfall_endstation_7011.pipelines import VariancePipeline
 
 
 def test_metadata_required_fields():
     p = VariancePipeline()
     # package_name + notebook are class-level resource pointers; everything
     # else is exposed via the introspection dict.
-    assert VariancePipeline.package_name == "lucid_endstation_7011"
+    assert VariancePipeline.package_name == "lightfall_endstation_7011"
     assert VariancePipeline.notebook.endswith("compute_variance.ipynb")
 
     info = p.get_introspection_data()
@@ -83,11 +83,11 @@ def test_plugin_imports_via_entry_point_group():
     """
     from importlib.metadata import entry_points
 
-    eps = list(entry_points(group="lucid_pipelines.pipeline"))
+    eps = list(entry_points(group="lightfall_pipelines.pipeline"))
     names = {ep.name for ep in eps}
     if "variance" not in names:
         pytest.skip(
-            "lucid_endstation_7011 not installed (run `pip install -e .` "
+            "lightfall_endstation_7011 not installed (run `pip install -e .` "
             "to pick up the entry point)"
         )
     ep = next(ep for ep in eps if ep.name == "variance")

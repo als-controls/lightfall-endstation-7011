@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from lucid.plugins.controller_plugin import ControllerPlugin
+from lightfall.plugins.controller_plugin import ControllerPlugin
 from PySide6.QtWidgets import QGroupBox, QWidget
 
 if TYPE_CHECKING:
-    from lucid.ui.models.device_tree import DeviceTreeItem
+    from lightfall.ui.models.device_tree import DeviceTreeItem
 
 
 class _PIMTECameraWidget:
@@ -20,8 +20,8 @@ class _PIMTECameraWidget:
 
     def __new__(cls, parent: QWidget | None = None):
         """Create the widget by subclassing at runtime."""
-        from lucid.ui.widgets.camera.panels.temperature import TemperaturePanel
-        from lucid.ui.widgets.camera.plan_based import PlanBasedCameraControlWidget
+        from lightfall.ui.widgets.camera.panels.temperature import TemperaturePanel
+        from lightfall.ui.widgets.camera.plan_based import PlanBasedCameraControlWidget
 
         class _Widget(PlanBasedCameraControlWidget):
             """PIMTE camera widget with temperature panel."""

@@ -1,7 +1,7 @@
 """Smoke tests for the BlackflyAgent skill."""
 from __future__ import annotations
 
-from lucid_endstation_7011.observers.blackfly.skill import BlackflyAgent
+from lightfall_endstation_7011.observers.blackfly.skill import BlackflyAgent
 
 
 def test_blackfly_agent_metadata():
@@ -17,8 +17,8 @@ def test_blackfly_agent_system_prompt_non_empty():
     body = BlackflyAgent().get_system_prompt()
     assert body.strip(), "system prompt must not be empty"
     # The prompt must teach the agent the public import paths.
-    assert "lucid.ui.widgets.observers" in body
-    assert "lucid_endstation_7011.observers.blackfly" in body
+    assert "lightfall.ui.widgets.observers" in body
+    assert "lightfall_endstation_7011.observers.blackfly" in body
     # And the workflow must mention the discover tool by name.
     assert "discover_blackfly_cameras" in body
 
