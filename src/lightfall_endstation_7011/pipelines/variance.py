@@ -8,14 +8,14 @@ access_blob inheritance) for the beamline's own data.
 """
 from __future__ import annotations
 
-from lucid_pipelines.plugin import PipelinePlugin
+from lightfall_pipelines.plugin import PipelinePlugin
 
 
 class VariancePipeline(PipelinePlugin):
     """Compute per-pixel variance across the time axis of an image stream.
 
     Inputs:
-        The pipeline reads ``LUCID_INPUT_RUN_UID`` from the executor env
+        The pipeline reads ``Lightfall_INPUT_RUN_UID`` from the executor env
         and pulls the configured image stream from Tiled. The stream is
         expected to be a 3-D array of shape ``(N_frames, H, W)``.
 
@@ -55,7 +55,7 @@ class VariancePipeline(PipelinePlugin):
     }
     output_tags = ["variance"]
     notebook = "pipelines/notebooks/compute_variance.ipynb"
-    package_name = "lucid_endstation_7011"
+    package_name = "lightfall_endstation_7011"
     inherit_input_access_blob = True
     store_executed_notebook = True
     timeout_seconds = 600

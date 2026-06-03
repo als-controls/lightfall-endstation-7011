@@ -11,7 +11,7 @@ from typing import Callable
 
 import numpy as np
 
-from lucid.ui.widgets.observers import CameraBase
+from lightfall.ui.widgets.observers import CameraBase
 
 from . import gvcp, gvsp, pixel_formats, registers
 from .gvcp_transport import GvcpClient

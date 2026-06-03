@@ -3,7 +3,7 @@ from __future__ import annotations
 import struct
 import pytest
 
-from lucid_endstation_7011.observers.blackfly import gvsp
+from lightfall_endstation_7011.observers.blackfly import gvsp
 
 
 def _gvsp_header(status: int, block_id: int, fmt: int, pkt_id: int) -> bytes:

@@ -2,19 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `reflection_alignment` AgentPlugin to `lucid-endstation-7011` that drives reflection-geometry sample alignment (knife-edge lift + rocking-curve theta) by orchestrating existing LUCID scan/data/move tools, with deterministic, unit-tested fitting and convergence logic.
+**Goal:** Add a `reflection_alignment` AgentPlugin to `lightfall-endstation-7011` that drives reflection-geometry sample alignment (knife-edge lift + rocking-curve theta) by orchestrating existing Lightfall scan/data/move tools, with deterministic, unit-tested fitting and convergence logic.
 
 **Architecture:** Approach C — numerical truth (edge/peak fitting, convergence) lives in pure, unit-tested modules; the AgentPlugin contributes a procedure prompt plus thin MCP tools (`check_beam`, `fit_lift_halfcut`, `fit_theta_peak`) that wrap those pure functions and the existing Tiled/DeviceCatalog access. Scans reuse the registry plan `rel_scan`.
 
-**Tech Stack:** Python 3.11+, numpy, scipy (`curve_fit`, `erf`), bluesky/ophyd (via lucid), pytest. Plugin base: `lucid.plugins.agent_plugin.AgentPlugin`.
+**Tech Stack:** Python 3.11+, numpy, scipy (`curve_fit`, `erf`), bluesky/ophyd (via lightfall), pytest. Plugin base: `lightfall.plugins.agent_plugin.AgentPlugin`.
 
-**Repo / branch:** `lucid-endstation-7011`, branch `feature/reflection-alignment` (already created; spec committed there).
+**Repo / branch:** `lightfall-endstation-7011`, branch `feature/reflection-alignment` (already created; spec committed there).
 
 **Test interpreter:** the endstation package is installed editable into the ncs venv. Run all tests with:
 ```
 C:/Users/rp/PycharmProjects/ncs/ncs/.venv/Scripts/python.exe -m pytest <args>
 ```
-A bare `pytest` may resolve to a system interpreter lacking `lucid`. In the commands below, `PY` = that interpreter path.
+A bare `pytest` may resolve to a system interpreter lacking `lightfall`. In the commands below, `PY` = that interpreter path.
 
 **Spec:** `docs/superpowers/specs/2026-05-26-reflection-alignment-design.md`
 
@@ -23,7 +23,7 @@ A bare `pytest` may resolve to a system interpreter lacking `lucid`. In the comm
 ## File Structure
 
 ```
-src/lucid_endstation_7011/alignment/
+src/lightfall_endstation_7011/alignment/
   __init__.py          # package marker
   fitting.py           # EdgeFit, PeakFit, fit_falling_edge_halfcut, fit_peak  (pure)
   convergence.py       # ConvergenceTracker                                    (pure)
@@ -35,7 +35,7 @@ tests/alignment/
   test_tools.py        # tests skill.py module-level helpers
   test_skill.py        # tests AgentPlugin surface
 ```
-Plus modify: `pyproject.toml` (add scipy), `src/lucid_endstation_7011/manifest.py` (register agent).
+Plus modify: `pyproject.toml` (add scipy), `src/lightfall_endstation_7011/manifest.py` (register agent).
 
 ---
 
@@ -43,7 +43,7 @@ Plus modify: `pyproject.toml` (add scipy), `src/lucid_endstation_7011/manifest.p
 
 **Files:**
 - Modify: `pyproject.toml:24-32` (dependencies list)
-- Create: `src/lucid_endstation_7011/alignment/__init__.py`
+- Create: `src/lightfall_endstation_7011/alignment/__init__.py`
 - Create: `tests/alignment/__init__.py`
 
 - [ ] **Step 1: Add scipy to dependencies**
@@ -54,8 +54,8 @@ In `pyproject.toml`, add `"scipy>=1.10",` to the `dependencies` array (after `"n
 dependencies = [
     "ophyd>=1.6.0",
     "bluesky>=1.8.0",
-    "lucid",  # For controller plugin base classes
-    "lucid-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
+    "lightfall",  # For controller plugin base classes
+    "lightfall-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
     "numpy>=1.24",
     "scipy>=1.10",
     "scrapbook>=0.5",
@@ -65,7 +65,7 @@ dependencies = [
 
 - [ ] **Step 2: Create the package markers**
 
-`src/lucid_endstation_7011/alignment/__init__.py`:
+`src/lightfall_endstation_7011/alignment/__init__.py`:
 ```python
 """Reflection-geometry sample alignment skill for the 7.0.1.1 endstation."""
 ```
@@ -77,13 +77,13 @@ dependencies = [
 
 - [ ] **Step 3: Verify the package imports**
 
-Run: `C:/Users/rp/PycharmProjects/ncs/ncs/.venv/Scripts/python.exe -c "import lucid_endstation_7011.alignment; import scipy; print('ok', scipy.__version__)"`
+Run: `C:/Users/rp/PycharmProjects/ncs/ncs/.venv/Scripts/python.exe -c "import lightfall_endstation_7011.alignment; import scipy; print('ok', scipy.__version__)"`
 Expected: prints `ok` and a scipy version >= 1.10.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add pyproject.toml src/lucid_endstation_7011/alignment/__init__.py tests/alignment/__init__.py
+git add pyproject.toml src/lightfall_endstation_7011/alignment/__init__.py tests/alignment/__init__.py
 git commit -m "feat(alignment): add scipy dep and alignment package skeleton"
 ```
 
@@ -92,7 +92,7 @@ git commit -m "feat(alignment): add scipy dep and alignment package skeleton"
 ### Task 2: Falling-edge half-cut fit
 
 **Files:**
-- Create: `src/lucid_endstation_7011/alignment/fitting.py`
+- Create: `src/lightfall_endstation_7011/alignment/fitting.py`
 - Test: `tests/alignment/test_fitting.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -105,7 +105,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import erf
 
-from lucid_endstation_7011.alignment.fitting import fit_falling_edge_halfcut
+from lightfall_endstation_7011.alignment.fitting import fit_falling_edge_halfcut
 
 
 def _falling_edge(x, floor, baseline, x0, w):
@@ -153,7 +153,7 @@ Expected: FAIL with `ImportError` / `cannot import name 'fit_falling_edge_halfcu
 
 - [ ] **Step 3: Implement fitting.py (edge portion)**
 
-`src/lucid_endstation_7011/alignment/fitting.py`:
+`src/lightfall_endstation_7011/alignment/fitting.py`:
 ```python
 """Pure fitting functions for reflection-alignment scans.
 
@@ -247,7 +247,7 @@ Expected: all 4 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/fitting.py tests/alignment/test_fitting.py
+git add src/lightfall_endstation_7011/alignment/fitting.py tests/alignment/test_fitting.py
 git commit -m "feat(alignment): falling-edge half-cut fit"
 ```
 
@@ -256,14 +256,14 @@ git commit -m "feat(alignment): falling-edge half-cut fit"
 ### Task 3: Gaussian peak fit
 
 **Files:**
-- Modify: `src/lucid_endstation_7011/alignment/fitting.py`
+- Modify: `src/lightfall_endstation_7011/alignment/fitting.py`
 - Test: `tests/alignment/test_fitting.py` (append)
 
 - [ ] **Step 1: Append the failing tests**
 
 Add to `tests/alignment/test_fitting.py`:
 ```python
-from lucid_endstation_7011.alignment.fitting import fit_peak
+from lightfall_endstation_7011.alignment.fitting import fit_peak
 
 
 def _gaussian(x, bg, amp, x0, sigma):
@@ -300,7 +300,7 @@ Expected: the three peak tests FAIL with `cannot import name 'fit_peak'`.
 
 - [ ] **Step 3: Append the peak implementation to fitting.py**
 
-Add to `src/lucid_endstation_7011/alignment/fitting.py`:
+Add to `src/lightfall_endstation_7011/alignment/fitting.py`:
 ```python
 @dataclass
 class PeakFit:
@@ -366,7 +366,7 @@ Expected: all 7 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/fitting.py tests/alignment/test_fitting.py
+git add src/lightfall_endstation_7011/alignment/fitting.py tests/alignment/test_fitting.py
 git commit -m "feat(alignment): gaussian peak fit"
 ```
 
@@ -375,7 +375,7 @@ git commit -m "feat(alignment): gaussian peak fit"
 ### Task 4: Convergence tracker
 
 **Files:**
-- Create: `src/lucid_endstation_7011/alignment/convergence.py`
+- Create: `src/lightfall_endstation_7011/alignment/convergence.py`
 - Test: `tests/alignment/test_convergence.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -385,7 +385,7 @@ git commit -m "feat(alignment): gaussian peak fit"
 """Tests for the convergence tracker."""
 from __future__ import annotations
 
-from lucid_endstation_7011.alignment.convergence import ConvergenceTracker
+from lightfall_endstation_7011.alignment.convergence import ConvergenceTracker
 
 
 def test_requires_three_cycles_to_converge_by_default():
@@ -436,7 +436,7 @@ Expected: FAIL with `cannot import name 'ConvergenceTracker'`.
 
 - [ ] **Step 3: Implement convergence.py**
 
-`src/lucid_endstation_7011/alignment/convergence.py`:
+`src/lightfall_endstation_7011/alignment/convergence.py`:
 ```python
 """Convergence tracking for the reflection-alignment refinement loop."""
 from __future__ import annotations
@@ -481,7 +481,7 @@ Expected: all 5 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/convergence.py tests/alignment/test_convergence.py
+git add src/lightfall_endstation_7011/alignment/convergence.py tests/alignment/test_convergence.py
 git commit -m "feat(alignment): convergence tracker"
 ```
 
@@ -490,7 +490,7 @@ git commit -m "feat(alignment): convergence tracker"
 ### Task 5: Beam-status helper
 
 **Files:**
-- Create: `src/lucid_endstation_7011/alignment/skill.py`
+- Create: `src/lightfall_endstation_7011/alignment/skill.py`
 - Test: `tests/alignment/test_tools.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -503,7 +503,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import erf
 
-from lucid_endstation_7011.alignment import skill
+from lightfall_endstation_7011.alignment import skill
 
 
 class _FakeOphyd:
@@ -561,15 +561,15 @@ def test_beam_status_catalog_disconnected():
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `C:/Users/rp/PycharmProjects/ncs/ncs/.venv/Scripts/python.exe -m pytest tests/alignment/test_tools.py -v`
-Expected: FAIL with `module 'lucid_endstation_7011.alignment.skill' has no attribute '_beam_status'` (or ImportError if file absent).
+Expected: FAIL with `module 'lightfall_endstation_7011.alignment.skill' has no attribute '_beam_status'` (or ImportError if file absent).
 
 - [ ] **Step 3: Create skill.py with constants and the beam helper**
 
-`src/lucid_endstation_7011/alignment/skill.py`:
+`src/lightfall_endstation_7011/alignment/skill.py`:
 ```python
 """ReflectionAlignmentAgent: drive reflection-geometry sample alignment.
 
-Numerical decisions live in lucid_endstation_7011.alignment.fitting and
+Numerical decisions live in lightfall_endstation_7011.alignment.fitting and
 .convergence (pure, unit-tested). This module contributes the procedure
 prompt and thin MCP tools that wrap those functions plus the existing
 DeviceCatalog / Tiled access. Scans reuse the registry plan ``rel_scan``.
@@ -578,10 +578,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from lucid.plugins.agent_plugin import AgentPlugin
-from lucid.utils.logging import logger
+from lightfall.plugins.agent_plugin import AgentPlugin
+from lightfall.utils.logging import logger
 
-from lucid_endstation_7011.alignment.fitting import fit_falling_edge_halfcut, fit_peak
+from lightfall_endstation_7011.alignment.fitting import fit_falling_edge_halfcut, fit_peak
 
 DIODE_NAME = "DetectorDiodeCurrent"
 LIFT_MOTOR = "sample_lift"
@@ -625,7 +625,7 @@ Expected: all 4 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/skill.py tests/alignment/test_tools.py
+git add src/lightfall_endstation_7011/alignment/skill.py tests/alignment/test_tools.py
 git commit -m "feat(alignment): beam-status helper"
 ```
 
@@ -634,7 +634,7 @@ git commit -m "feat(alignment): beam-status helper"
 ### Task 6: Scan-read and fit-from-uid helpers
 
 **Files:**
-- Modify: `src/lucid_endstation_7011/alignment/skill.py`
+- Modify: `src/lightfall_endstation_7011/alignment/skill.py`
 - Test: `tests/alignment/test_tools.py` (append)
 
 - [ ] **Step 1: Append the failing tests**
@@ -683,7 +683,7 @@ Expected: the three new tests FAIL with `module ... has no attribute '_fit_lift_
 
 - [ ] **Step 3: Append the read + fit helpers to skill.py**
 
-Add to `src/lucid_endstation_7011/alignment/skill.py`:
+Add to `src/lightfall_endstation_7011/alignment/skill.py`:
 ```python
 def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = None):
     """Read (x, y) numpy arrays from a Bluesky run's primary stream via Tiled.
@@ -692,8 +692,8 @@ def _read_scan_xy(uid: str, x_field: str | None = None, y_field: str | None = No
     non-diode, non-timestamp column). Raises RuntimeError on missing data.
     """
     import numpy as np
-    from lucid.services.tiled_service import TiledService
-    from lucid.utils.tiled_helpers import read_events
+    from lightfall.services.tiled_service import TiledService
+    from lightfall.utils.tiled_helpers import read_events
 
     service = TiledService.get_instance()
     if not service.is_connected or service._client is None:
@@ -757,7 +757,7 @@ Expected: all 7 tests PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/skill.py tests/alignment/test_tools.py
+git add src/lightfall_endstation_7011/alignment/skill.py tests/alignment/test_tools.py
 git commit -m "feat(alignment): tiled scan-read and fit-from-uid helpers"
 ```
 
@@ -766,7 +766,7 @@ git commit -m "feat(alignment): tiled scan-read and fit-from-uid helpers"
 ### Task 7: ReflectionAlignmentAgent (prompt + MCP tools)
 
 **Files:**
-- Modify: `src/lucid_endstation_7011/alignment/skill.py`
+- Modify: `src/lightfall_endstation_7011/alignment/skill.py`
 - Test: `tests/alignment/test_skill.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -776,7 +776,7 @@ git commit -m "feat(alignment): tiled scan-read and fit-from-uid helpers"
 """Smoke tests for the ReflectionAlignmentAgent skill surface."""
 from __future__ import annotations
 
-from lucid_endstation_7011.alignment.skill import ReflectionAlignmentAgent
+from lightfall_endstation_7011.alignment.skill import ReflectionAlignmentAgent
 
 
 def test_metadata():
@@ -825,7 +825,7 @@ Expected: FAIL with `cannot import name 'ReflectionAlignmentAgent'`.
 
 - [ ] **Step 3: Append the AgentPlugin class to skill.py**
 
-Add to `src/lucid_endstation_7011/alignment/skill.py`:
+Add to `src/lightfall_endstation_7011/alignment/skill.py`:
 ```python
 class ReflectionAlignmentAgent(AgentPlugin):
     """Skill that drives reflection-geometry sample alignment.
@@ -833,7 +833,7 @@ class ReflectionAlignmentAgent(AgentPlugin):
     Teaches the embedded agent the knife-edge (lift) + rocking-curve (theta)
     procedure and contributes three MCP tools: check_beam, fit_lift_halfcut,
     fit_theta_peak. Scans, run polling, run-data display, and motor moves all
-    reuse existing LUCID acquisition tools.
+    reuse existing Lightfall acquisition tools.
     """
 
     @property
@@ -933,9 +933,9 @@ which device to use before proceeding.
             input_schema={"type": "object", "properties": {}},
         )
         async def check_beam(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.devices import DeviceCatalog
-            from lucid.plugins.agents._mcp_helpers import mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.devices import DeviceCatalog
+            from lightfall.plugins.agents._mcp_helpers import mcp_result
 
             def _run():
                 return mcp_result(_beam_status(DeviceCatalog.get_instance()))
@@ -960,8 +960,8 @@ which device to use before proceeding.
             },
         )
         async def fit_lift_halfcut(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             uid = args.get("uid")
             if not uid:
@@ -995,8 +995,8 @@ which device to use before proceeding.
             },
         )
         async def fit_theta_peak(args: dict) -> dict[str, Any]:
-            from lucid.claude._internal.threading import run_on_main_thread
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.claude._internal.threading import run_on_main_thread
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
             uid = args.get("uid")
             if not uid:
@@ -1023,7 +1023,7 @@ Expected: `test_metadata` and `test_system_prompt_covers_devices_and_rules` PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/alignment/skill.py tests/alignment/test_skill.py
+git add src/lightfall_endstation_7011/alignment/skill.py tests/alignment/test_skill.py
 git commit -m "feat(alignment): ReflectionAlignmentAgent prompt and MCP tools"
 ```
 
@@ -1032,7 +1032,7 @@ git commit -m "feat(alignment): ReflectionAlignmentAgent prompt and MCP tools"
 ### Task 8: Register the agent in the manifest
 
 **Files:**
-- Modify: `src/lucid_endstation_7011/manifest.py:36-43`
+- Modify: `src/lightfall_endstation_7011/manifest.py:36-43`
 - Test: `tests/alignment/test_skill.py` (append)
 
 - [ ] **Step 1: Append the failing test**
@@ -1040,13 +1040,13 @@ git commit -m "feat(alignment): ReflectionAlignmentAgent prompt and MCP tools"
 Add to `tests/alignment/test_skill.py`:
 ```python
 def test_manifest_registers_reflection_alignment():
-    from lucid_endstation_7011.manifest import manifest
+    from lightfall_endstation_7011.manifest import manifest
 
     entry = next((p for p in manifest.plugins if p.name == "reflection_alignment"), None)
     assert entry is not None, "reflection_alignment not registered in manifest"
     assert entry.type_name == "agent"
     assert entry.import_path == (
-        "lucid_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
+        "lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
     )
 ```
 
@@ -1057,13 +1057,13 @@ Expected: FAIL with `AssertionError: reflection_alignment not registered in mani
 
 - [ ] **Step 3: Add the manifest entry**
 
-In `src/lucid_endstation_7011/manifest.py`, add a new `PluginEntry` to the `plugins=[...]` list (after the Blackfly entry, before the closing `]`):
+In `src/lightfall_endstation_7011/manifest.py`, add a new `PluginEntry` to the `plugins=[...]` list (after the Blackfly entry, before the closing `]`):
 ```python
         # Agent plugin: reflection-geometry sample alignment skill
         PluginEntry(
             type_name="agent",
             name="reflection_alignment",
-            import_path="lucid_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
+            import_path="lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
             metadata={"priority": 30},
         ),
 ```
@@ -1077,7 +1077,7 @@ Expected: all tests PASS (the SDK tool test may SKIP).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/manifest.py tests/alignment/test_skill.py
+git add src/lightfall_endstation_7011/manifest.py tests/alignment/test_skill.py
 git commit -m "feat(alignment): register reflection_alignment agent in manifest"
 ```
 
@@ -1093,4 +1093,4 @@ git commit -m "feat(alignment): register reflection_alignment agent in manifest"
 
 - The convergence loop, scan sequencing, and human checkpoints live in the **agent prompt**, not in Python — there is no orchestration function to test. The testable surface is the pure fitting/convergence code and the tool helpers.
 - `_read_scan_xy` does live Tiled I/O and is not unit-tested directly; it is covered indirectly by monkeypatching it in the fit-from-uid tests. Validate it against a real run during the manual UI check.
-- Final manual check (no automated coverage): in a running LUCID session with the 7.0.1.1 profile, enable the skill, confirm the three tools register under `mcp__reflection_alignment__*`, and dry-run the procedure against a sample.
+- Final manual check (no automated coverage): in a running Lightfall session with the 7.0.1.1 profile, enable the skill, confirm the three tools register under `mcp__reflection_alignment__*`, and dry-run the procedure against a sample.

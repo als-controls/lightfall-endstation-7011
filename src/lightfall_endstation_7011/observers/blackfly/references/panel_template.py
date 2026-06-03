@@ -1,6 +1,6 @@
 """Canonical PanelPlugin template for a Blackfly S live-view panel.
 
-The Blackfly skill (lucid_endstation_7011.observers.blackfly.skill.BlackflyAgent)
+The Blackfly skill (lightfall_endstation_7011.observers.blackfly.skill.BlackflyAgent)
 instructs the embedded Claude agent to:
   1. read this file's source verbatim,
   2. substitute the placeholders <IP> (camera IPv4) and <HOST> (host NIC IPv4)
@@ -19,17 +19,17 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from lucid.plugins.panel_plugin import PanelPlugin
-from lucid.ui.panels.base import BasePanel, PanelMetadata
-from lucid.ui.widgets.observers import CameraImageView
-from lucid_endstation_7011.observers.blackfly import BlackflyCamera
+from lightfall.plugins.panel_plugin import PanelPlugin
+from lightfall.ui.panels.base import BasePanel, PanelMetadata
+from lightfall.ui.widgets.observers import CameraImageView
+from lightfall_endstation_7011.observers.blackfly import BlackflyCamera
 
 
 class BlackflyLivePanel(BasePanel):
     """Live-view panel hosting a single BlackflyCamera + CameraImageView."""
 
     panel_metadata: ClassVar[PanelMetadata] = PanelMetadata(
-        id="lucid.panels.user.blackfly_live",
+        id="lightfall.panels.user.blackfly_live",
         name="Blackfly S Live View",
         description="Live image stream from a FLIR Blackfly S over GVCP/GVSP",
         category="Devices",

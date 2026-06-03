@@ -2,24 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a prompt-only `EndstationSupportAgent` LUCID skill to `lucid-endstation-7011` that gives the embedded agent a growing, beamline-specific user-support triage, initialized with the "detector shows no signal" procedure.
+**Goal:** Add a prompt-only `EndstationSupportAgent` Lightfall skill to `lightfall-endstation-7011` that gives the embedded agent a growing, beamline-specific user-support triage, initialized with the "detector shows no signal" procedure.
 
 **Architecture:** One `AgentPlugin` subclass with a short always-loaded router prompt (when-to-use + safety rules + a topic table) and a `references/` directory of per-topic procedures loaded lazily by the SDK Skill tool. It reuses the agent's existing MCP tools (`ncs_get_beam_status`, the `device_tools` family) and contributes no tools of its own. Registered via one `manifest.py` entry.
 
-**Tech Stack:** Python 3.11+, `lucid.plugins.agent_plugin.AgentPlugin`, pytest. Markdown reference files. No new runtime dependencies.
+**Tech Stack:** Python 3.11+, `lightfall.plugins.agent_plugin.AgentPlugin`, pytest. Markdown reference files. No new runtime dependencies.
 
 **Spec:** `docs/superpowers/specs/2026-05-26-endstation-user-support-design.md`
 
-**Environment note:** Run pytest from the repo root (`lucid-endstation-7011/`) in the environment where `lucid` is importable — the same one the existing `tests/observers/blackfly` and `tests/alignment` suites use. `testpaths = ["tests"]` is already configured.
+**Environment note:** Run pytest from the repo root (`lightfall-endstation-7011/`) in the environment where `lightfall` is importable — the same one the existing `tests/observers/blackfly` and `tests/alignment` suites use. `testpaths = ["tests"]` is already configured.
 
 ---
 
 ## File Structure
 
-- Create: `src/lucid_endstation_7011/support/__init__.py` — empty package marker.
-- Create: `src/lucid_endstation_7011/support/skill.py` — `EndstationSupportAgent(AgentPlugin)`: metadata, router system prompt, references dir. No `create_tools` override (base returns `[]`).
-- Create: `src/lucid_endstation_7011/support/references/detector_no_signal.md` — the first topic's full procedure.
-- Modify: `src/lucid_endstation_7011/manifest.py` — add one `PluginEntry` for the agent.
+- Create: `src/lightfall_endstation_7011/support/__init__.py` — empty package marker.
+- Create: `src/lightfall_endstation_7011/support/skill.py` — `EndstationSupportAgent(AgentPlugin)`: metadata, router system prompt, references dir. No `create_tools` override (base returns `[]`).
+- Create: `src/lightfall_endstation_7011/support/references/detector_no_signal.md` — the first topic's full procedure.
+- Modify: `src/lightfall_endstation_7011/manifest.py` — add one `PluginEntry` for the agent.
 - Create: `tests/support/__init__.py` — empty package marker.
 - Create: `tests/support/test_skill.py` — `AgentPlugin` surface, references-dir + content tripwires, manifest registration.
 
@@ -30,8 +30,8 @@
 **Files:**
 - Create: `tests/support/__init__.py`
 - Create: `tests/support/test_skill.py`
-- Create: `src/lucid_endstation_7011/support/__init__.py`
-- Create: `src/lucid_endstation_7011/support/skill.py`
+- Create: `src/lightfall_endstation_7011/support/__init__.py`
+- Create: `src/lightfall_endstation_7011/support/skill.py`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -43,7 +43,7 @@ Create `tests/support/test_skill.py`:
 """Smoke tests for the EndstationSupportAgent skill."""
 from __future__ import annotations
 
-from lucid_endstation_7011.support.skill import EndstationSupportAgent
+from lightfall_endstation_7011.support.skill import EndstationSupportAgent
 
 
 def test_support_agent_metadata():
@@ -74,13 +74,13 @@ def test_support_agent_system_prompt_is_a_router():
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/support/test_skill.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'lucid_endstation_7011.support'`.
+Expected: FAIL — `ModuleNotFoundError: No module named 'lightfall_endstation_7011.support'`.
 
 - [ ] **Step 3: Create the package marker and the skill**
 
-Create `src/lucid_endstation_7011/support/__init__.py` as an empty file.
+Create `src/lightfall_endstation_7011/support/__init__.py` as an empty file.
 
-Create `src/lucid_endstation_7011/support/skill.py`:
+Create `src/lightfall_endstation_7011/support/skill.py`:
 
 ```python
 """EndstationSupportAgent: guided user-support triage for ALS beamline 7.0.1.1.
@@ -95,7 +95,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lucid.plugins.agent_plugin import AgentPlugin
+from lightfall.plugins.agent_plugin import AgentPlugin
 
 
 class EndstationSupportAgent(AgentPlugin):
@@ -178,8 +178,8 @@ Expected: PASS — `test_support_agent_metadata`, `test_support_agent_has_no_too
 
 ```bash
 git add tests/support/__init__.py tests/support/test_skill.py \
-  src/lucid_endstation_7011/support/__init__.py \
-  src/lucid_endstation_7011/support/skill.py
+  src/lightfall_endstation_7011/support/__init__.py \
+  src/lightfall_endstation_7011/support/skill.py
 git commit -m "feat(support): add EndstationSupportAgent router skill"
 ```
 
@@ -188,7 +188,7 @@ git commit -m "feat(support): add EndstationSupportAgent router skill"
 ## Task 2: detector_no_signal reference file
 
 **Files:**
-- Create: `src/lucid_endstation_7011/support/references/detector_no_signal.md`
+- Create: `src/lightfall_endstation_7011/support/references/detector_no_signal.md`
 - Modify: `tests/support/test_skill.py` (append two tests)
 
 - [ ] **Step 1: Write the failing tests**
@@ -231,7 +231,7 @@ Expected: FAIL — `assert refs.is_dir()` is False (directory does not exist yet
 
 - [ ] **Step 3: Create the reference file**
 
-Create `src/lucid_endstation_7011/support/references/detector_no_signal.md`:
+Create `src/lightfall_endstation_7011/support/references/detector_no_signal.md`:
 
 ```markdown
 # Detector shows no signal
@@ -333,7 +333,7 @@ Expected: PASS — all five tests, including the two new ones.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/support/references/detector_no_signal.md \
+git add src/lightfall_endstation_7011/support/references/detector_no_signal.md \
   tests/support/test_skill.py
 git commit -m "feat(support): add detector-no-signal triage reference"
 ```
@@ -343,7 +343,7 @@ git commit -m "feat(support): add detector-no-signal triage reference"
 ## Task 3: Register the agent in the manifest
 
 **Files:**
-- Modify: `src/lucid_endstation_7011/manifest.py`
+- Modify: `src/lightfall_endstation_7011/manifest.py`
 - Modify: `tests/support/test_skill.py` (append one test)
 
 - [ ] **Step 1: Write the failing test**
@@ -352,7 +352,7 @@ Append to `tests/support/test_skill.py`:
 
 ```python
 def test_manifest_registers_support_agent():
-    from lucid_endstation_7011.manifest import manifest
+    from lightfall_endstation_7011.manifest import manifest
 
     entries = [p for p in manifest.plugins if p.name == "endstation_support"]
     assert len(entries) == 1, "expected exactly one endstation_support entry"
@@ -360,7 +360,7 @@ def test_manifest_registers_support_agent():
     assert entry.type_name == "agent"
     assert (
         entry.import_path
-        == "lucid_endstation_7011.support.skill:EndstationSupportAgent"
+        == "lightfall_endstation_7011.support.skill:EndstationSupportAgent"
     )
 ```
 
@@ -371,7 +371,7 @@ Expected: FAIL — `assert len(entries) == 1` is False (0 entries; not yet regis
 
 - [ ] **Step 3: Add the manifest entry**
 
-In `src/lucid_endstation_7011/manifest.py`, add a new `PluginEntry` to the
+In `src/lightfall_endstation_7011/manifest.py`, add a new `PluginEntry` to the
 `plugins=[...]` list, immediately after the existing Blackfly agent entry (the
 one with `name="blackfly"`):
 
@@ -380,7 +380,7 @@ one with `name="blackfly"`):
         PluginEntry(
             type_name="agent",
             name="endstation_support",
-            import_path="lucid_endstation_7011.support.skill:EndstationSupportAgent",
+            import_path="lightfall_endstation_7011.support.skill:EndstationSupportAgent",
             metadata={"priority": 20},
         ),
 ```
@@ -397,7 +397,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lucid_endstation_7011/manifest.py tests/support/test_skill.py
+git add src/lightfall_endstation_7011/manifest.py tests/support/test_skill.py
 git commit -m "feat(support): register endstation_support agent in manifest"
 ```
 
@@ -419,7 +419,7 @@ Expected: PASS (or only the pre-existing `hw`-marked Blackfly hardware tests ski
 
 - [ ] **Step 3: Lint the new code**
 
-Run: `ruff check src/lucid_endstation_7011/support tests/support`
+Run: `ruff check src/lightfall_endstation_7011/support tests/support`
 Expected: no errors. Fix any reported issues (import order, unused names) and re-run.
 
 - [ ] **Step 4: Commit any lint fixes**
@@ -427,7 +427,7 @@ Expected: no errors. Fix any reported issues (import order, unused names) and re
 Only if Step 3 required changes:
 
 ```bash
-git add src/lucid_endstation_7011/support tests/support
+git add src/lightfall_endstation_7011/support tests/support
 git commit -m "style(support): ruff fixes"
 ```
 
@@ -450,6 +450,6 @@ git commit -m "style(support): ruff fixes"
 
 **Type/name consistency:** `EndstationSupportAgent`, `endstation_support`,
 `"Endstation 7.0.1.1 Support"`, `operations`, priority `20`, import path
-`lucid_endstation_7011.support.skill:EndstationSupportAgent`, and reference path
+`lightfall_endstation_7011.support.skill:EndstationSupportAgent`, and reference path
 `references/detector_no_signal.md` are identical across the spec, prompt, tests,
 and manifest entry. ✓

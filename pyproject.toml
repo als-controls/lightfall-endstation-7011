@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lucid-endstation-7011"
+name = "lightfall-endstation-7011"
 version = "0.1.0"
-description = "LUCID plugins for ALS Beamline 7.0.1.1 endstation"
+description = "Lightfall plugins for ALS Beamline 7.0.1.1 endstation"
 readme = "README.md"
 license = "BSD-3-Clause"
 requires-python = ">=3.11"
@@ -24,8 +24,8 @@ classifiers = [
 dependencies = [
     "ophyd>=1.6.0",
     "bluesky>=1.8.0",
-    "lucid",  # For controller plugin base classes
-    "lucid-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
+    "lightfall",  # For controller plugin base classes
+    "lightfall-pipelines>=0.1.0",  # PipelinePlugin ABC + notebook helpers
     "numpy>=1.24",
     "scipy>=1.10",
     "scrapbook>=0.5",
@@ -39,23 +39,23 @@ dev = [
 ]
 
 [project.scripts]
-bfly-discover = "lucid_endstation_7011.observers.blackfly.scripts.discover:main"
+bfly-discover = "lightfall_endstation_7011.observers.blackfly.scripts.discover:main"
 
 [project.urls]
-Homepage = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
-Repository = "https://git.als.lbl.gov/ncs/lucid-endstation-7011"
+Homepage = "https://git.als.lbl.gov/ncs/lightfall-endstation-7011"
+Repository = "https://git.als.lbl.gov/ncs/lightfall-endstation-7011"
 
-[project.entry-points."lucid.plugins"]
-lucid_endstation_7011 = "lucid_endstation_7011.manifest:manifest"
+[project.entry-points."lightfall.plugins"]
+lightfall_endstation_7011 = "lightfall_endstation_7011.manifest:manifest"
 
-[project.entry-points."lucid_pipelines.pipeline"]
-variance = "lucid_endstation_7011.pipelines:VariancePipeline"
+[project.entry-points."lightfall_pipelines.pipeline"]
+variance = "lightfall_endstation_7011.pipelines:VariancePipeline"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lucid_endstation_7011"]
+packages = ["src/lightfall_endstation_7011"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"src/lucid_endstation_7011/pipelines/notebooks/compute_variance.ipynb" = "lucid_endstation_7011/pipelines/notebooks/compute_variance.ipynb"
+"src/lightfall_endstation_7011/pipelines/notebooks/compute_variance.ipynb" = "lightfall_endstation_7011/pipelines/notebooks/compute_variance.ipynb"
 
 [tool.ruff]
 line-length = 100

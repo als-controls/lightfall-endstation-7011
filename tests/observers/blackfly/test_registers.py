@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from lucid_endstation_7011.observers.blackfly import registers
+from lightfall_endstation_7011.observers.blackfly import registers
 
 
 def test_register_addresses_unique():

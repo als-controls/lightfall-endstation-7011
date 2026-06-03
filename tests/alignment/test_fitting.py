@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import erf
 
-from lucid_endstation_7011.alignment.fitting import fit_falling_edge_halfcut
+from lightfall_endstation_7011.alignment.fitting import fit_falling_edge_halfcut
 
 
 def _falling_edge(x, floor, baseline, x0, w):
@@ -65,7 +65,7 @@ def test_noisy_ramp_not_detected():
 # ---------------------------------------------------------------------------
 # Gaussian peak fit (rocking curve)
 # ---------------------------------------------------------------------------
-from lucid_endstation_7011.alignment.fitting import fit_peak
+from lightfall_endstation_7011.alignment.fitting import fit_peak
 
 
 def _gaussian(x, bg, amp, x0, sigma):

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from lucid.plugins.controller_plugin import ControllerPlugin
+from lightfall.plugins.controller_plugin import ControllerPlugin
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
-    from lucid.ui.models.device_tree import DeviceTreeItem
+    from lightfall.ui.models.device_tree import DeviceTreeItem
 
 
 class DiodeControlWidget(QWidget):
