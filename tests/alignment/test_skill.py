@@ -1,7 +1,7 @@
 """Smoke tests for the ReflectionAlignmentAgent skill surface."""
 from __future__ import annotations
 
-from lucid_endstation_7011.alignment.skill import ReflectionAlignmentAgent
+from lightfall_endstation_7011.alignment.skill import ReflectionAlignmentAgent
 
 
 def test_metadata():
@@ -76,11 +76,11 @@ def test_system_prompt_covers_new_alignment_rules():
 
 
 def test_manifest_registers_reflection_alignment():
-    from lucid_endstation_7011.manifest import manifest
+    from lightfall_endstation_7011.manifest import manifest
 
     entry = next((p for p in manifest.plugins if p.name == "reflection_alignment"), None)
     assert entry is not None, "reflection_alignment not registered in manifest"
     assert entry.type_name == "agent"
     assert entry.import_path == (
-        "lucid_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
+        "lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
     )

@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from lucid_endstation_7011.observers.blackfly.discovery import discover
+from lightfall_endstation_7011.observers.blackfly.discovery import discover
 
 
 @pytest.fixture

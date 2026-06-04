@@ -2,14 +2,14 @@
 
 **Date:** 2026-05-26
 **Status:** Approved (design); pending implementation plan
-**Repos touched:** `lucid-endstation-7011` (only). No `ncs/ncs` changes — reuses the
+**Repos touched:** `lightfall-endstation-7011` (only). No `ncs/ncs` changes — reuses the
 existing `ncs_get_beam_status` and `device_tools` MCP tools already shipped to the
 embedded agent.
 
 ## Problem
 
 Users at ALS beamline 7.0.1.1 hit recurring operational problems whose triage is a
-known, beamline-specific checklist — part of which the embedded LUCID agent can read
+known, beamline-specific checklist — part of which the embedded Lightfall agent can read
 and act on itself, and part of which requires a human at the hutch (covering
 viewports, throwing a manual switch, eyeballing a YAG). Today that knowledge lives in
 the heads of experts (Sophie). We want a **growing** user-support skill for the
@@ -72,7 +72,7 @@ The detector-no-signal procedure, as provided by Sophie:
 ## Architecture
 
 ```
-src/lucid_endstation_7011/support/
+src/lightfall_endstation_7011/support/
   __init__.py
   skill.py                      # EndstationSupportAgent(AgentPlugin), prompt-only
   references/
@@ -88,7 +88,7 @@ A new manifest entry registers the agent:
 PluginEntry(
     type_name="agent",
     name="endstation_support",
-    import_path="lucid_endstation_7011.support.skill:EndstationSupportAgent",
+    import_path="lightfall_endstation_7011.support.skill:EndstationSupportAgent",
     metadata={"priority": 20},
 )
 ```

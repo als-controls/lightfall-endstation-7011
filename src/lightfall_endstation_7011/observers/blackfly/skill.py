@@ -5,8 +5,8 @@ import socket
 from pathlib import Path
 from typing import Any
 
-from lucid.plugins.agent_plugin import AgentPlugin
-from lucid.utils.logging import logger
+from lightfall.plugins.agent_plugin import AgentPlugin
+from lightfall.utils.logging import logger
 
 
 def _default_bind_ip() -> str:
@@ -72,8 +72,8 @@ those cameras.
 ### Public API
 
 ```python
-from lucid.ui.widgets.observers import CameraImageView
-from lucid_endstation_7011.observers.blackfly import BlackflyCamera
+from lightfall.ui.widgets.observers import CameraImageView
+from lightfall_endstation_7011.observers.blackfly import BlackflyCamera
 ```
 
 `BlackflyCamera(device_ip, bind_ip)` takes two strings: `device_ip` is the
@@ -143,9 +143,9 @@ default-route NIC.
         async def discover_blackfly_cameras(args: dict) -> dict[str, Any]:
             import asyncio
 
-            from lucid.plugins.agents._mcp_helpers import mcp_error, mcp_result
+            from lightfall.plugins.agents._mcp_helpers import mcp_error, mcp_result
 
-            from lucid_endstation_7011.observers.blackfly.discovery import discover
+            from lightfall_endstation_7011.observers.blackfly.discovery import discover
 
             bind_ip = args.get("bind_ip") or _default_bind_ip()
             timeout_s = float(args.get("timeout_s", 1.0))

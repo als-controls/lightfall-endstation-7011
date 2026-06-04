@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.special import erf
 
-from lucid_endstation_7011.alignment.fitting import (
+from lightfall_endstation_7011.alignment.fitting import (
     POSITION_R2_FLOOR,
     fit_falling_edge_halfcut,
     fit_peak,
