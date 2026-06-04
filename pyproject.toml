@@ -42,8 +42,8 @@ dev = [
 bfly-discover = "lightfall_endstation_7011.observers.blackfly.scripts.discover:main"
 
 [project.urls]
-Homepage = "https://git.als.lbl.gov/ncs/lightfall-endstation-7011"
-Repository = "https://git.als.lbl.gov/ncs/lightfall-endstation-7011"
+Homepage = "https://github.com/als-controls/lightfall-endstation-7011"
+Repository = "https://github.com/als-controls/lightfall-endstation-7011"
 
 [project.entry-points."lightfall.plugins"]
 lightfall_endstation_7011 = "lightfall_endstation_7011.manifest:manifest"
