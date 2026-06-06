@@ -58,7 +58,12 @@ class RunBindingController:
     def enable(self) -> None:
         if self.enabled:
             return
-        self._client.enable()
+        reply = self._client.enable()
+        if reply is None:
+            # backend unreachable / request timed out — don't subscribe the
+            # RE; `enabled` stays False so a retry re-attempts cleanly
+            logger.warning("xpcs enable request failed or timed out; not subscribing RunEngine")
+            return
         self._re = self._get_re()
         self._token = self._re.subscribe(self._on_document)
 

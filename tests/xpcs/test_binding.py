@@ -6,12 +6,22 @@ from lightfall_endstation_7011.xpcs.binding import RunBindingController
 def _controller(fake_ipc):
     from lightfall_endstation_7011.xpcs.client import XPCSClient
     client = XPCSClient(ipc=fake_ipc)
+    # enable() requires a backend ack before subscribing the RunEngine
+    fake_ipc.replies.setdefault("xpcs.processing.enable", {"status": "ok"})
     re = MagicMock()
     re.subscribe.return_value = 7  # token
     creds = lambda: ("http://t", "key", None)
     ctl = RunBindingController(client=client, run_engine_getter=lambda: re,
                                credentials_getter=creds)
     return ctl, re, fake_ipc
+
+
+def test_enable_without_backend_does_not_subscribe(fake_ipc):
+    ctl, re, ipc = _controller(fake_ipc)
+    ipc.replies.pop("xpcs.processing.enable")  # backend unreachable -> None reply
+    ctl.enable()
+    re.subscribe.assert_not_called()
+    assert not ctl.enabled
 
 
 def test_enable_subscribes_and_calls_backend(fake_ipc):

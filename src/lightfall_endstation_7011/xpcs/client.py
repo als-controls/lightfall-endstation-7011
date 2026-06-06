@@ -54,9 +54,7 @@ class XPCSClient(QObject):
         return self._ipc.request(subject, data or {}, timeout_ms=timeout_ms)
 
     def discover(self):
-        if self._ipc is None:
-            return None
-        return self._ipc.request("_xpcs.discover", {}, timeout_ms=2000)
+        return self._request("_xpcs.discover", {})
 
     def enable(self):
         return self._request("xpcs.processing.enable")
