@@ -56,5 +56,11 @@ manifest = PluginManifest(
             import_path="lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
             metadata={"priority": 30},
         ),
+        # Panel plugin: live XPCS g2 / measurement-progress panel
+        PluginEntry(
+            type_name="panel",
+            name="xpcs",
+            import_path="lightfall_endstation_7011.xpcs.plugin:XPCSPanelPlugin",
+        ),
     ],
 )
