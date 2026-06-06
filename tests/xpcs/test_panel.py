@@ -1,0 +1,103 @@
+from unittest.mock import MagicMock
+
+import pyqtgraph as pg
+import pytest
+from PySide6.QtWidgets import QWidget
+
+from lightfall_endstation_7011.xpcs.client import XPCSClient
+from lightfall_endstation_7011.xpcs.panel import XPCSPanel
+
+
+@pytest.fixture
+def panel(qtbot, fake_ipc):
+    client = XPCSClient(ipc=fake_ipc)
+    binding = MagicMock()
+    binding.enabled = False
+
+    def image_factory():
+        w = pg.PlotWidget()
+        return w, w.getPlotItem()
+
+    p = XPCSPanel(client=client, binding=binding, image_widget_factory=image_factory)
+    qtbot.addWidget(p)
+    p.test_ipc = fake_ipc
+    p.test_binding = binding
+    return p
+
+
+def test_metadata():
+    md = XPCSPanel.panel_metadata
+    assert md.id == "lightfall_endstation_7011.panels.xpcs"
+    assert md.singleton is True
+
+
+def test_g2_event_updates_plots_and_stats(panel):
+    panel.test_ipc.emit("xpcs.g2.updated", {
+        "run_uid": "u1", "frames_count": 100, "buffer_size": 100,
+        "file_path": "C:/data/x.h5", "seq": 1,
+        "tau": [1.0, 2.0], "g2": {"average": [1.5, 1.0]},
+        "intensity": {"frame_index": [0, 1], "average": [1.0, 1.1]},
+        "metrics": {"average": {"Time-scale 0": 0.3}},
+    })
+    assert "average" in panel._g2_plot._curves
+    assert "average" in panel._intensity_plot._curves
+    assert ("average", "Time-scale 0") in panel._convergence_plot._series
+    assert "100" in panel._stats_label.text()
+    assert "x.h5" in panel._file_label.text()
+
+
+def test_section_event_feeds_sections_plot(panel):
+    panel.test_ipc.emit("xpcs.section.completed",
+                        {"index": 1, "tau": [1, 2], "g2": {"average": [1.5, 1.0]}})
+    assert len(panel._sections_plot._section_curves) == 1
+
+
+def test_state_event_updates_label(panel):
+    panel.test_ipc.emit("xpcs.state", {"state": "Processing", "run_uid": "u1"})
+    assert "Processing" in panel._state_label.text()
+
+
+def test_enable_toggle_drives_binding(panel, qtbot):
+    panel._enable_toggle.setChecked(True)
+    panel.test_binding.enable.assert_called_once()
+    panel._enable_toggle.setChecked(False)
+    panel.test_binding.disable.assert_called_once()
+
+
+def test_add_roi_button_syncs_to_backend(panel):
+    panel.test_ipc.replies["xpcs.roi.set"] = {"status": "ok"}
+    panel._on_add_roi()
+    roi_requests = [r for r in panel.test_ipc.requests if r[0] == "xpcs.roi.set"]
+    assert len(roi_requests) == 1
+    assert roi_requests[0][1]["shape"]["type"] == "rect"
+
+
+def test_apply_mask_sends_shapes(panel):
+    panel.test_ipc.replies["xpcs.mask.set"] = {"status": "ok"}
+    panel._on_add_mask()
+    panel._on_apply_mask()
+    mask_requests = [r for r in panel.test_ipc.requests if r[0] == "xpcs.mask.set"]
+    assert len(mask_requests) == 1
+    assert len(mask_requests[0][1]["shapes"]) == 1
+
+
+def test_resync_rebuilds_rois_and_sections(panel):
+    panel.test_ipc.replies["xpcs.status"] = {
+        "status": "ok", "state": "Idle", "frames_count": 0, "buffer_size": 0,
+        "file_path": None, "run_uid": None, "sections_count": 1,
+        "rois": {"r1": {"type": "rect", "x": 1, "y": 2, "w": 3, "h": 4}},
+        "mask": {"shapes": [], "path": None},
+    }
+    panel.test_ipc.replies["xpcs.sections.get"] = {
+        "status": "ok", "total": 1,
+        "sections": [{"index": 1, "frames": 10, "tau": [1, 2],
+                      "g2": {"average": [1.5, 1.0]}}],
+    }
+    panel.resync()
+    assert set(panel._roi_overlay.rois) == {"r1"}
+    assert len(panel._sections_plot._section_curves) == 1
+
+
+def test_error_event_shows_in_status(panel):
+    panel.test_ipc.emit("xpcs.error", {"message": "GPU on fire"})
+    assert "GPU on fire" in panel._error_label.text()
