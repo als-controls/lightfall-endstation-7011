@@ -15,6 +15,13 @@ This design ports the system into the Lightfall ecosystem, following the
 Tsuchinoko rescope precedent (`tsuchinoko/docs/design/2026-04-12-tsuchinoko-rescope.md`):
 headless NATS service + Tiled record + Qt panel in Lightfall.
 
+**Purpose:** XPCS-live exists for *live user observation of measurement
+progress* — evaluating measurement quality and judging when an experiment is
+finished (g2 convergence / SNR). The panel is a progress-and-quality
+instrument, not just a g2 display. Feature reference:
+[pyXpcsViewer](https://github.com/AdvancedPhotonSource/pyXpcsViewer) (APS),
+particularly its stability and intensity-fluctuation views.
+
 **Baseline:** the rescope builds on xpcs_live PR #11 (`states` branch — the
 buffered CUDA `Correlator` with UUID-tracked ROIs, `device_info.py`, tests).
 PR #11 is merged to master as a standalone precursor step so the rescope diff
@@ -24,7 +31,16 @@ stays reviewable.
 
 - g2viewer feature parity: live image, draggable rect ROIs, rect masks with
   deferred apply, multi-ROI g2 plot (log-τ), stats readout.
-- Plus: surface `metrics.py` stability metrics (never exposed by g2viewer).
+- **Convergence plot:** surface `metrics.py` (`RMS(LogarithmicMetric)` — RMS
+  change of g2 vs cached snapshots at logarithmic time scales) as a
+  metric-history-vs-frames plot per ROI, with an optional "converged"
+  threshold line. This is the quantitative "is it finished" view.
+- **Intensity vs time:** per-ROI mean intensity + frame average vs frame
+  index (beam-damage / sample-drift tell; pyXpcsViewer's intensity
+  fluctuation view, live).
+- **Per-section g2 overlay:** g2 computed over consecutive `section_size`
+  frame chunks, overlaid (aging/beam-damage tell — pyXpcsViewer's stability
+  plot transposed into g2 space, since no q-calibration exists in the stack).
 - Processed data recorded to Tiled in the bound bluesky run, Tsuchinoko-style.
 - Processing enabled/disabled by Lightfall; runs bound via RunEngine subscription.
 
@@ -37,6 +53,10 @@ stays reviewable.
   the Tiled record exists regardless; the replay viewer is future work.
 - q-bin/calibration-derived masks (geometric JSON has room to grow; the
   `xpcs.mask.set` file-path form covers bad-pixel maps).
+- Detector geometry / azimuthal integration — so no per-section SAXS-1D
+  *I(q)* stability curves (pyXpcsViewer's form); the per-section g2 overlay
+  and I(t) cover the same questions without calibration. Revisit if geometry
+  lands in the stack.
 
 ## Architecture
 
@@ -106,7 +126,8 @@ NATS-MCP bridge picks both up identically).
 | `xpcs.roi.clear` | `{}` → `{status}` |
 | `xpcs.mask.set` | `{shapes: [rect…]}` or `{path: "<bad-pixel file>"}` → `{status}` |
 | `xpcs.mask.clear` | `{}` → `{status}` |
-| `xpcs.status` | `{}` → `{state, frames_count, buffer_size, file_path, pv, run_uid, rois, mask}` — ROIs/mask echoed as geometry for panel resync |
+| `xpcs.status` | `{}` → `{state, frames_count, buffer_size, file_path, pv, run_uid, rois, mask, sections_count}` — ROIs/mask echoed as geometry for panel resync |
+| `xpcs.sections.get` | `{from_section, limit}` → `{sections: [{index, frames, tau: […], g2: {…}}…], total}` — paginated fetch of completed per-section g2 (multitau-rebinned) for panel resync |
 
 ROIs and masks travel as geometric JSON; the backend rasterizes to boolean
 arrays internally. No pixel arrays cross NATS. Mask shapes mark regions to
@@ -119,8 +140,15 @@ is used as-is (True = include).
 | Subject | Payload |
 |---|---|
 | `xpcs.state` | `{state, run_uid}` on every transition |
-| `xpcs.g2.updated` | `{run_uid, frames_count, buffer_size, file_path, tau: […], g2: {average: […], <roi_id>: […]}, metrics: {…}, seq}` at ~1–2 Hz while processing; τ/g2 multitau-rebinned |
+| `xpcs.g2.updated` | `{run_uid, frames_count, buffer_size, file_path, tau: […], g2: {average: […], <roi_id>: […]}, intensity: {frame_index: […], average: […], <roi_id>: […]}, metrics: {average: {…}, <roi_id>: {…}}, seq}` at ~1–2 Hz while processing; τ/g2 multitau-rebinned; I(t) decimated to ≤~1024 points |
+| `xpcs.section.completed` | `{run_uid, index, frames, tau: […], g2: {average: […], <roi_id>: […]}}` when a `section_size` boundary is crossed; multitau-rebinned |
 | `xpcs.error` | `{message, traceback}` |
+
+The panel accumulates convergence-metric history client-side from
+`xpcs.g2.updated` events (each carries the current per-time-scale RMS values);
+full metric history lives in the Tiled snapshots. Section curves are
+accumulated from `xpcs.section.completed`, with `xpcs.sections.get` as the
+resync path after a panel restart.
 
 ### Multitau rebinning (inline payload)
 
@@ -132,6 +160,23 @@ levels. τ = bin mean, g2 = bin mean. Point count is ~`m·log2(N)` regardless of
 run length (100 k frames → ~260 points). The correlator itself still computes
 full linear-τ g2; rebinning is display-side packaging only. The Tiled record
 stays full resolution.
+
+### Per-frame and per-section computation
+
+- **I(t):** per-frame mean intensity for the full (masked) frame and per ROI,
+  accumulated as the frames stream in — a cheap reduction alongside the
+  correlator feed. Inline payloads decimate to ≤~1024 points (stride
+  decimation); Tiled snapshots carry the full arrays.
+- **Sections:** a second, short-lived correlator accumulates the current
+  `section_size`-frame chunk (configurable, default ~1000 frames; total run
+  length is unknown live, so fixed-count division à la pyXpcsViewer doesn't
+  apply). At each boundary its g2 is stashed, the section correlator resets,
+  and `xpcs.section.completed` fires. Section τ range is capped at
+  `section_size/2` — sufficient for aging/damage comparison at short-to-mid τ.
+  Sections reset with the main correlator on bind/reset.
+- **Convergence metrics:** `RMS(LogarithmicMetric)` instances per curve
+  (average + each ROI), evaluated on the full-run g2 each update cycle;
+  history retained backend-side for Tiled snapshots.
 
 ### Service states
 
@@ -156,15 +201,21 @@ run[run_uid]/
 ├── primary/          (Lightfall's acquisition)
 └── xpcs/
     ├── config: ROI geometry, mask spec, detector PV, correlator params
+    │           (incl. section_size, multitau m)
     ├── snapshot_001/
-    │   ├── tau (n,), g2_average (n,), g2_roi_<id> (n,)
-    │   ├── metrics_* (per-ROI stability metrics)
+    │   ├── tau (n,), g2_average (n,), g2_roi_<id> (n,)        [full linear τ]
+    │   ├── intensity_frame_index (f,), intensity_average (f,),
+    │   │   intensity_roi_<id> (f,)                             [full I(t)]
+    │   ├── metrics_* (per-curve, per-time-scale RMS history)
     │   └── frames_count
-    └── snapshot_NNN/
+    ├── snapshot_NNN/
+    ├── section_001/
+    │   └── tau (s,), g2_average (s,), g2_roi_<id> (s,), frames [full linear τ]
+    └── section_NNN/   (written once, at section completion — naturally immutable)
 ```
 
 - Snapshots every `snapshot_interval` (default 60 s) + always one final at
-  `xpcs.run.stop`.
+  `xpcs.run.stop`. Sections are written as they complete.
 - Per-snapshot sub-containers are immutable; shapes vary freely between
   snapshots (g2 grows) — same rationale as Tsuchinoko's `iter_NNN`.
 - The `xpcs` stream is opened **lazily on the first snapshot**, so bound runs
@@ -202,12 +253,18 @@ The panel's *Enable Processing* toggle drives everything:
 - **Masks:** deferred-apply semantics — edit locally, *Apply Mask* sends
   `xpcs.mask.set` (mask changes trigger GPU buffer reallocation, so they stay
   an explicit action).
-- **Right — g2 plot:** themed `pg.PlotWidget`, log-τ axis, one curve per ROI +
-  average, curve colors matching ROI overlay colors. Fed directly from
-  `xpcs.g2.updated` payloads.
-- **Below — metrics + stats:** per-ROI stability badges from the `metrics`
-  payload; state, frame count, buffer-fill bar, current file path. Controls:
-  Enable toggle, Reset, Add ROI, Clear ROIs, Add/Apply/Clear Mask.
+- **Right — tabbed plots** (themed `pg.PlotWidget`s; curve colors match ROI
+  overlay colors throughout):
+  - **g2** — log-τ axis, one curve per ROI + average, fed from
+    `xpcs.g2.updated`.
+  - **Sections** — per-section g2 overlay (color-graded by section index so
+    aging reads as a drift), fed from `xpcs.section.completed`.
+  - **I(t)** — per-ROI + average intensity vs frame index.
+  - **Convergence** — RMS metric history vs frames per time scale (log-y),
+    optional threshold line marking "converged".
+- **Below — metrics + stats:** per-ROI convergence badges (latest RMS values
+  vs threshold); state, frame count, buffer-fill bar, current file path.
+  Controls: Enable toggle, Reset, Add ROI, Clear ROIs, Add/Apply/Clear Mask.
 
 NATS access via `lightfall.ipc.service.get_ipc_service()`; subscriptions with
 `main_thread=True` so payload handling lands on the Qt main thread.
@@ -215,7 +272,9 @@ NATS access via `lightfall.ipc.service.get_ipc_service()`; subscriptions with
 ### Session resync
 
 On panel open or service reconnect: `_xpcs.discover` → `xpcs.status`; the
-echoed ROI/mask geometry rebuilds the overlays. Panel restarts and service
+echoed ROI/mask geometry rebuilds the overlays, and `xpcs.sections.get`
+backfills the section overlay. (Convergence history prior to reconnect is not
+backfilled live — it remains available in the Tiled record.) Panel restarts and service
 restarts both recover cleanly — the backend is the single source of truth,
 replacing g2viewer's fragile multi-session sync.
 
@@ -236,9 +295,14 @@ replacing g2viewer's fragile multi-session sync.
 
 - Rect rasterization (geometry → boolean array) unit tests.
 - Multitau rebinning: point count, monotonic τ, mean preservation per bin.
+- I(t) decimation: cap respected, endpoints preserved.
+- Section accumulator: boundary detection, stash/reset cycle, τ cap at
+  `section_size/2`, reset-on-bind.
+- Convergence metrics: RMS history shape per time scale (extends the existing
+  `metrics.py` behavior, currently untested).
 - NATS service handlers against a fake connection.
 - `TiledPublisher` against a temp Tiled server (lazy stream open, snapshot
-  shape variation, final-snapshot-on-stop).
+  shape variation, section writes, final-snapshot-on-stop).
 
 **Frontend (endstation-7011):**
 
@@ -264,6 +328,7 @@ Both repos: run tests with the project venv python, never bare `pytest`.
 | ROI/mask protocol | Geometric JSON, backend rasterizes; file-path form for bad-pixel masks |
 | Live g2 path | Inline in NATS events (multitau-rebinned); Tiled is the full-res record |
 | Inline binning | Multitau (m=16/level, dyadic), not generic log-binning |
-| Scope | g2viewer parity + stability metrics; no replay viz widget yet |
+| Scope | g2viewer parity + convergence plot + I(t) + per-section g2 overlay; no replay viz widget yet |
+| Stability view | Convergence plot (metrics.py RMS) + per-section g2 overlay in lieu of pyXpcsViewer's per-section I(q) — no q-calibration in stack |
 | Backend approach | Rescope xpcs_live in place (Tsuchinoko-style); drop ZMQ — no remaining consumers |
 | Baseline | PR #11 (`states` branch) merged first |
