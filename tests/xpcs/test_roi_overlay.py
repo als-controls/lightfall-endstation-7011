@@ -58,6 +58,19 @@ def test_sync_from_status_rebuilds(host, qtbot):
     assert (shape.x, shape.y, shape.w, shape.h) == (5.0, 6.0, 7.0, 8.0)
 
 
+def test_sync_cancels_pending_debounce(host, qtbot):
+    mgr = ROIOverlayManager(host, debounce_ms=500)
+    rid = mgr.add_roi(RectShape(10, 20, 64, 64))
+    mgr.rois[rid].setPos((30, 40))  # starts the 500 ms debounce timer
+    assert rid in mgr._timers and mgr._timers[rid].isActive()
+    mgr.sync_from_status({rid: {"type": "rect", "x": 5, "y": 6, "w": 7, "h": 8}})
+    assert mgr._timers == {}  # stale timer stopped — no unsolicited roiChanged
+    emitted = []
+    mgr.roiChanged.connect(lambda *a: emitted.append(a))
+    qtbot.wait(600)
+    assert emitted == []
+
+
 def test_mask_rects_local_until_collected(host, qtbot):
     mgr = ROIOverlayManager(host, debounce_ms=0)
     mgr.add_mask_rect(RectShape(0, 0, 4, 4))

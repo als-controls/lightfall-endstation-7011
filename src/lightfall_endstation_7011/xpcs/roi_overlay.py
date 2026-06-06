@@ -81,6 +81,11 @@ class ROIOverlayManager(QObject):
         for roi_id, item in list(self.rois.items()):
             self._plot_item.removeItem(item)
             self.rois.pop(roi_id)
+        # stop pending debounce timers — a timer surviving the rebuild could
+        # fire for a re-added id and emit an unsolicited roiChanged
+        for timer in self._timers.values():
+            timer.stop()
+        self._timers.clear()
         self._color_index = 0
         for roi_id, shape_dict in rois.items():
             self.add_roi(RectShape.from_dict(shape_dict), roi_id=roi_id)

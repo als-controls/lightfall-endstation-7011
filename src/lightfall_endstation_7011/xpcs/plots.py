@@ -94,9 +94,10 @@ class SectionsPlot(_CurvePlot):
         idx = payload.get("index", len(self._section_curves) + 1)
         # color-grade: early sections dim, late sections bright
         hue = int(200 * (1 - 1 / (1 + 0.15 * idx)))
+        # no legend name: long runs accumulate 100+ sections and the color
+        # gradient alone communicates ordering
         curve = self._plot.plot(np.asarray(tau, float), np.asarray(g2, float),
-                                pen=pg.mkPen(pg.intColor(hue, 255), width=1),
-                                name=f"section {idx}")
+                                pen=pg.mkPen(pg.intColor(hue, 255), width=1))
         self._section_curves.append(curve)
 
     def clear(self) -> None:
