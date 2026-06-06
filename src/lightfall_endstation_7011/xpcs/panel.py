@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable, ClassVar
 
 from loguru import logger
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -84,7 +84,9 @@ class XPCSPanel(BasePanel):
             lambda: _default_image_factory(detector_device_name))
         super().__init__(parent)
         self._connect_client()
-        self.resync()
+        # defer initial resync off the construction path — status() blocks the
+        # calling thread up to its timeout when the backend is away
+        QTimer.singleShot(0, self.resync)
 
     # BasePanel calls this during __init__
     def _setup_ui(self) -> None:
@@ -156,6 +158,14 @@ class XPCSPanel(BasePanel):
         self._roi_overlay.roiChanged.connect(self._client.set_roi)
         self._roi_overlay.roiRemoved.connect(self._client.remove_roi)
 
+    def _on_closing(self) -> None:
+        """Tear down: unsubscribe the RunEngine + disable backend processing."""
+        try:
+            self._binding.disable()
+        except Exception as ex:
+            logger.exception(ex)
+        super()._on_closing()
+
     # --- event handlers ---
 
     def _on_g2_updated(self, payload: dict) -> None:
@@ -166,8 +176,7 @@ class XPCSPanel(BasePanel):
         buf = payload.get("buffer_size", 0)
         self._stats_label.setText(f"Frames: {frames}  Buffer: {buf}")
         path = payload.get("file_path")
-        if path:
-            self._file_label.setText(f"File: {path}")
+        self._file_label.setText(f"File: {path}" if path else "File: —")
 
     def _on_state_changed(self, payload: dict) -> None:
         self._state_label.setText(f"State: {payload.get('state', '?')}")
@@ -223,8 +232,11 @@ class XPCSPanel(BasePanel):
             fetched = 0
             while fetched < n_sections:
                 page = self._client.get_sections(from_section=fetched, limit=20)
-                if not page or not page.get("sections"):
+                sections = (page or {}).get("sections") or []
+                if not sections:
                     break
-                for sec in page["sections"]:
+                for sec in sections:
                     self._sections_plot.add_section(sec)
-                fetched += len(page["sections"])
+                fetched += len(sections)
+                if len(sections) < 20:
+                    break

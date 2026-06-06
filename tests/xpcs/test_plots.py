@@ -57,3 +57,20 @@ def test_convergence_plot_accumulates_history(qtbot):
     assert w._series[key0] == [(20, 0.5), (40, 0.2)]
     w.clear()
     assert w._series == {}
+
+
+def test_convergence_consumes_real_metrics_keys(qtbot):
+    """Round-trip: actual MetricsTracker output shape -> ConvergencePlot."""
+    w = ConvergencePlot()
+    qtbot.addWidget(w)
+    # shape produced by xpcs_live MetricsTracker.update(): per-curve dicts with
+    # "Time-scale N" (+ optional "Time-scale N end") keys
+    payload = {"frames_count": 40, "metrics": {
+        "average": {"Time-scale 0": 0.2, "Time-scale 1": 0.4, "Time-scale 1 end": 0.4},
+        "roi-abc": {"Time-scale 0": 0.3},
+    }}
+    w.update_from_payload(payload)
+    assert ("average", "Time-scale 0") in w._series
+    assert ("average", "Time-scale 1") in w._series
+    assert ("roi-abc", "Time-scale 0") in w._series
+    assert not any(scale.endswith(" end") for _, scale in w._series)

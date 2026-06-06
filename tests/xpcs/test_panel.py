@@ -101,3 +101,16 @@ def test_resync_rebuilds_rois_and_sections(panel):
 def test_error_event_shows_in_status(panel):
     panel.test_ipc.emit("xpcs.error", {"message": "GPU on fire"})
     assert "GPU on fire" in panel._error_label.text()
+
+
+def test_panel_close_disables_binding(panel):
+    panel.test_binding.enabled = True
+    panel._on_closing()
+    panel.test_binding.disable.assert_called_once()
+
+
+def test_enable_toggle_rolls_back_on_failure(panel):
+    panel.test_binding.enable.side_effect = RuntimeError("backend gone")
+    panel.test_binding.enabled = False
+    panel._enable_toggle.setChecked(True)
+    assert panel._enable_toggle.isChecked() is False
