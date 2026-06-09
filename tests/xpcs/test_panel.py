@@ -83,6 +83,39 @@ def test_state_event_updates_label(panel):
     assert "Processing" in panel._state_label.text()
 
 
+def test_enable_toggle_lives_in_title_bar(panel):
+    assert panel._enable_toggle in panel.title_bar_widgets
+
+
+def test_reset_action_in_title_bar(panel):
+    panel.test_ipc.replies["xpcs.reset"] = {"status": "ok"}
+    assert panel._reset_action in panel.title_bar_actions
+    panel._reset_action.trigger()
+    assert any(r[0] == "xpcs.reset" for r in panel.test_ipc.requests)
+
+
+def test_roi_and_mask_tools_injected_into_image_toolbar(qtbot, fake_ipc):
+    injected = []
+
+    class _ToolView(pg.PlotWidget):
+        def add_toolbar_action(self, action):
+            injected.append(action)
+            return None
+
+    def factory():
+        v = _ToolView()
+        return v, v.getPlotItem()
+
+    binding = MagicMock()
+    binding.enabled = False
+    p = XPCSPanel(client=XPCSClient(ipc=fake_ipc), binding=binding,
+                  image_widget_factory=factory)
+    qtbot.addWidget(p)
+    assert p._add_roi_action in injected
+    assert p._clear_rois_action in injected
+    assert p._mask_action in injected          # masking submenu launcher
+
+
 def test_enable_toggle_drives_binding(panel, qtbot):
     panel._enable_toggle.setChecked(True)
     panel.test_binding.enable.assert_called_once()

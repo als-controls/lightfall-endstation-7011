@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Callable, ClassVar
 
+import qtawesome as qta
 from loguru import logger
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QPushButton,
+    QMenu,
     QSizePolicy,
     QSplitter,
     QTabWidget,
@@ -24,6 +26,7 @@ from .client import XPCSClient
 from .plots import ConvergencePlot, G2Plot, IntensityPlot, SectionsPlot
 from .roi_overlay import ROIOverlayManager
 from .shapes import RectShape
+from .spinner_toggle import SpinnerToggle
 
 DEFAULT_ROI = RectShape(x=992, y=992, w=64, h=64)     # near center of 2048^2
 DEFAULT_MASK = RectShape(x=974, y=974, w=100, h=100)
@@ -106,7 +109,7 @@ class XPCSPanel(BasePanel):
     def _setup_ui(self) -> None:
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # left: image + controls
+        # left: just the live image (ROI/mask tools live in its toolbar)
         left = QWidget()
         left_layout = QVBoxLayout(left)
         self._left_layout = left_layout
@@ -114,29 +117,18 @@ class XPCSPanel(BasePanel):
         self._image_widget = image_widget
         self._roi_overlay = ROIOverlayManager(plot_item)
         left_layout.addWidget(image_widget, stretch=1)
-
-        controls = QHBoxLayout()
-        self._enable_toggle = QPushButton("Enable Processing")
-        self._enable_toggle.setCheckable(True)
-        self._enable_toggle.toggled.connect(self._on_enable_toggled)
-        reset_btn = QPushButton("Reset")
-        reset_btn.clicked.connect(lambda: self._client.reset())
-        add_roi_btn = QPushButton("Add ROI")
-        add_roi_btn.clicked.connect(self._on_add_roi)
-        clear_rois_btn = QPushButton("Clear ROIs")
-        clear_rois_btn.clicked.connect(self._on_clear_rois)
-        add_mask_btn = QPushButton("Add Mask")
-        add_mask_btn.clicked.connect(self._on_add_mask)
-        apply_mask_btn = QPushButton("Apply Mask")
-        apply_mask_btn.clicked.connect(self._on_apply_mask)
-        clear_mask_btn = QPushButton("Clear Mask")
-        clear_mask_btn.clicked.connect(self._on_clear_mask)
-        for b in (self._enable_toggle, reset_btn, add_roi_btn, clear_rois_btn,
-                  add_mask_btn, apply_mask_btn, clear_mask_btn):
-            controls.addWidget(b)
-        controls.addStretch()
-        left_layout.addLayout(controls)
         splitter.addWidget(left)
+
+        # Enable (spinner toggle) + Reset go in the panel title bar.
+        self._enable_toggle = SpinnerToggle(tooltip="Enable processing")
+        self._enable_toggle.toggled.connect(self._on_enable_toggled)
+        self.add_title_bar_widget(self._enable_toggle)
+        self._reset_action = self.add_title_bar_button(
+            "mdi6.trash-can", "Reset correlator", lambda: self._client.reset())
+
+        # ROI / mask tools go in the image view's own toolbar.
+        self._build_image_tools()
+        self._install_image_tools(image_widget)
 
         # right: tabbed plots
         tabs = QTabWidget()
@@ -178,6 +170,39 @@ class XPCSPanel(BasePanel):
         self._client.errorReceived.connect(self._on_error)
         self._roi_overlay.roiChanged.connect(self._client.set_roi)
         self._roi_overlay.roiRemoved.connect(self._client.remove_roi)
+
+    def _build_image_tools(self) -> None:
+        """Create the ROI/mask QActions shown in the image view's toolbar.
+
+        Built once and owned by the panel, so they can be re-injected onto a
+        fresh OphydImageView when the active detector changes.
+        """
+        self._add_roi_action = QAction(qta.icon("mdi6.select-drag"), "Add ROI", self)
+        self._add_roi_action.triggered.connect(self._on_add_roi)
+        self._clear_rois_action = QAction(
+            qta.icon("mdi6.select-remove"), "Clear ROIs", self)
+        self._clear_rois_action.triggered.connect(self._on_clear_rois)
+
+        # Masking launches a submenu of mask operations.
+        self._mask_menu = QMenu(self)
+        self._mask_menu.addAction("Add mask rect", self._on_add_mask)
+        self._mask_menu.addAction("Apply mask", self._on_apply_mask)
+        self._mask_menu.addAction("Clear mask", self._on_clear_mask)
+        self._mask_action = QAction(qta.icon("mdi6.select-inverse"), "Masking", self)
+        self._mask_action.setMenu(self._mask_menu)
+
+    def _install_image_tools(self, view) -> None:
+        """Inject the ROI/mask tools into a view's toolbar, if it supports it.
+
+        The placeholder PlotWidget (no detector) has no toolbar hook — tools
+        simply don't appear until a real OphydImageView is built.
+        """
+        adder = getattr(view, "add_toolbar_action", None)
+        if adder is None:
+            return
+        adder(self._add_roi_action)
+        adder(self._clear_rois_action)
+        adder(self._mask_action)
 
     def _on_closing(self) -> None:
         """Tear down: unsubscribe the RunEngine + disable backend processing."""
@@ -237,6 +262,7 @@ class XPCSPanel(BasePanel):
         self._image_widget.setParent(None)
         self._image_widget.deleteLater()
         self._image_widget = new_view
+        self._install_image_tools(new_view)  # ROI/mask tools onto the new toolbar
         # rebuild the ROI/mask overlay on the new image's plot item
         self._roi_overlay.clear_rois()
         self._roi_overlay.clear_mask_rects()
