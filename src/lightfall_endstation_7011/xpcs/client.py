@@ -90,7 +90,8 @@ class XPCSClient(QObject):
     # bind/stop are fire-and-forget publishes (run docs must not block on replies)
 
     def bind_run(self, run_uid: str, tiled_url: str = "", tiled_api_key=None,
-                 detector_prefix: str | None = None) -> None:
+                 detector_prefix: str | None = None,
+                 session_id: str | None = None) -> None:
         if self._ipc is None:
             return
         payload = {
@@ -98,6 +99,10 @@ class XPCSClient(QObject):
         if detector_prefix:
             # backend infers file PV + frame shape from this prefix per run
             payload["detector_prefix"] = detector_prefix
+        if session_id:
+            # user session (Keycloak sub) — backend drops a cached Tiled key
+            # minted for a different user session
+            payload["session_id"] = session_id
         self._ipc.publish("xpcs.run.bind", payload)
 
     def run_stop(self, run_uid: str) -> None:

@@ -84,13 +84,14 @@ def test_start_doc_sends_detector_prefix_and_notifies(fake_ipc):
         credentials_getter=lambda: ("http://t", "key", None),
         detector_getter=lambda doc: device,
         on_detector_resolved=resolved.append,
+        session_id_getter=lambda: "user-1",
     )
     ctl.enable()
     callback = re.subscribe.call_args[0][0]
     callback("start", {"uid": "runX", "detectors": ["PI_MTE3"]})
     assert fake_ipc.published == [("xpcs.run.bind", {
         "run_uid": "runX", "tiled_url": "http://t", "tiled_api_key": "key",
-        "detector_prefix": "13PICAM1:"})]
+        "detector_prefix": "13PICAM1:", "session_id": "user-1"})]
     assert resolved == [device]  # panel notified to rebuild image view
 
 
@@ -105,9 +106,11 @@ def test_start_doc_no_detector_omits_prefix_and_no_notify(fake_ipc):
         client=client, run_engine_getter=lambda: re,
         credentials_getter=lambda: ("http://t", "key", None),
         detector_getter=lambda doc: None, on_detector_resolved=resolved.append,
+        session_id_getter=lambda: None,
     )
     ctl.enable()
     callback = re.subscribe.call_args[0][0]
     callback("start", {"uid": "runX"})
     assert "detector_prefix" not in fake_ipc.published[0][1]
+    assert "session_id" not in fake_ipc.published[0][1]
     assert resolved == []

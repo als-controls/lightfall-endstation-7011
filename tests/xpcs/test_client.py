@@ -50,6 +50,18 @@ def test_bind_omits_detector_prefix_when_none(fake_ipc):
     assert "detector_prefix" not in fake_ipc.published[0][1]
 
 
+def test_bind_includes_session_id_when_given(fake_ipc):
+    c = XPCSClient(ipc=fake_ipc)
+    c.bind_run("uid1", session_id="user-abc")
+    assert fake_ipc.published[0][1]["session_id"] == "user-abc"
+
+
+def test_bind_omits_session_id_when_none(fake_ipc):
+    c = XPCSClient(ipc=fake_ipc)
+    c.bind_run("uid1", session_id=None)
+    assert "session_id" not in fake_ipc.published[0][1]
+
+
 def test_status_and_sections(fake_ipc):
     fake_ipc.replies["xpcs.status"] = {"status": "ok", "state": "Idle", "rois": {}}
     fake_ipc.replies["xpcs.sections.get"] = {"status": "ok", "sections": [], "total": 0}
