@@ -26,7 +26,6 @@ from .client import XPCSClient
 from .plots import ConvergencePlot, G2Plot, IntensityPlot, SectionsPlot
 from .roi_overlay import ROIOverlayManager
 from .shapes import RectShape
-from .spinner_toggle import SpinnerToggle
 
 DEFAULT_ROI = RectShape(x=992, y=992, w=64, h=64)     # near center of 2048^2
 DEFAULT_MASK = RectShape(x=974, y=974, w=100, h=100)
@@ -95,6 +94,7 @@ class XPCSPanel(BasePanel):
             lambda: _default_image_factory(detector_device_name))
         self._current_detector_prefix: str | None = None
         self._run_uid: str | None = None
+        self._file_path: str | None = None
         super().__init__(parent)
         self._connect_client()
         # rebuild the image view when a run resolves its detector (queued to
@@ -119,10 +119,10 @@ class XPCSPanel(BasePanel):
         left_layout.addWidget(image_widget, stretch=1)
         splitter.addWidget(left)
 
-        # Enable (spinner toggle) + Reset go in the panel title bar.
-        self._enable_toggle = SpinnerToggle(tooltip="Enable processing")
+        # Enable (checkable play/pause) + Reset go in the panel title bar.
+        self._enable_toggle = self.add_title_bar_button(
+            "mdi6.play-pause", "Enable processing", checkable=True)
         self._enable_toggle.toggled.connect(self._on_enable_toggled)
-        self.add_title_bar_widget(self._enable_toggle)
         self._reset_action = self.add_title_bar_button(
             "mdi6.trash-can", "Reset correlator", lambda: self._client.reset())
 
@@ -224,6 +224,11 @@ class XPCSPanel(BasePanel):
         self._stats_label.setText(f"Frames: {frames}  Buffer: {buf}")
         path = payload.get("file_path")
         self._file_label.setText(f"File: {path}" if path else "File: —")
+        if path and path != self._file_path:
+            # a new file opened and is streaming -> any earlier "could not open"
+            # was for a stale/previous path; drop it
+            self._file_path = path
+            self._error_label.setText("")
 
     def _on_state_changed(self, payload: dict) -> None:
         self._state_label.setText(f"State: {payload.get('state', '?')}")

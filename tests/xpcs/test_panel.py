@@ -83,8 +83,9 @@ def test_state_event_updates_label(panel):
     assert "Processing" in panel._state_label.text()
 
 
-def test_enable_toggle_lives_in_title_bar(panel):
-    assert panel._enable_toggle in panel.title_bar_widgets
+def test_enable_toggle_is_checkable_title_bar_action(panel):
+    assert panel._enable_toggle in panel.title_bar_actions
+    assert panel._enable_toggle.isCheckable()
 
 
 def test_reset_action_in_title_bar(panel):
@@ -160,6 +161,17 @@ def test_resync_rebuilds_rois_and_sections(panel):
 def test_error_event_shows_in_status(panel):
     panel.test_ipc.emit("xpcs.error", {"message": "GPU on fire"})
     assert "GPU on fire" in panel._error_label.text()
+
+
+def test_stale_error_clears_when_a_new_file_streams(panel):
+    panel.test_ipc.emit("xpcs.error", {"message": "Could not open /data/pimte/old.h5"})
+    assert "Could not open" in panel._error_label.text()
+    panel.test_ipc.emit("xpcs.g2.updated", {
+        "run_uid": "u1", "frames_count": 10, "buffer_size": 10,
+        "file_path": "/data/pimte/new.h5", "seq": 1,
+        "tau": [1.0], "g2": {"average": [1.0]},
+        "intensity": {"frame_index": [0], "average": [1.0]}, "metrics": {}})
+    assert panel._error_label.text() == ""   # healthy new file drops stale error
 
 
 def test_panel_close_disables_binding(panel):
