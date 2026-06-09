@@ -9,10 +9,18 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 ROI_COLORS = ["#D55E00", "#009E73", "#F0E442", "#0072B2", "#CC79A7"]
 
 
-def color_for(curve_id: str, roi_order: list[str] | None = None):
-    """Stable color per ROI id; None for 'average' (theme default pen)."""
+def color_for(curve_id: str, roi_order: list[str] | None = None,
+              colors: dict[str, str] | None = None):
+    """Color for a curve id; None for 'average' (theme default pen).
+
+    An explicit ``colors`` map (roi_id -> color, supplied by the ROI overlay)
+    wins, so g2/intensity curves match the on-image ROI colors exactly. Ids
+    absent from the map fall back to positional cycling within ``roi_order``.
+    """
     if curve_id == "average":
         return None
+    if colors and curve_id in colors:
+        return colors[curve_id]
     roi_order = roi_order or []
     try:
         idx = roi_order.index(curve_id)
@@ -41,9 +49,9 @@ class _CurvePlot(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._plot)
 
-    def _set_curve(self, curve_id: str, x, y, roi_order=None) -> None:
+    def _set_curve(self, curve_id: str, x, y, roi_order=None, colors=None) -> None:
         if curve_id not in self._curves:
-            color = color_for(curve_id, roi_order)
+            color = color_for(curve_id, roi_order, colors)
             kwargs = {"name": curve_id}
             if color is not None:
                 kwargs["pen"] = pg.mkPen(color, width=2)
@@ -65,13 +73,13 @@ class G2Plot(_CurvePlot):
     x_label = "tau (s)"
     y_label = "g2"
 
-    def update_from_payload(self, payload: dict) -> None:
+    def update_from_payload(self, payload: dict, colors: dict | None = None) -> None:
         tau = payload.get("tau") or []
         g2 = payload.get("g2") or {}
         roi_order = [k for k in g2 if k != "average"]
         for cid, ys in g2.items():
             if len(ys) == len(tau) and tau:
-                self._set_curve(cid, tau, ys, roi_order)
+                self._set_curve(cid, tau, ys, roi_order, colors)
         self._prune(set(g2))
 
 
@@ -110,7 +118,7 @@ class IntensityPlot(_CurvePlot):
     x_label = "frame"
     y_label = "mean intensity"
 
-    def update_from_payload(self, payload: dict) -> None:
+    def update_from_payload(self, payload: dict, colors: dict | None = None) -> None:
         intensity = payload.get("intensity") or {}
         frames = intensity.get("frame_index") or []
         roi_order = [k for k in intensity if k not in ("frame_index", "average")]
@@ -119,7 +127,7 @@ class IntensityPlot(_CurvePlot):
             if cid == "frame_index":
                 continue
             if len(ys) == len(frames) and frames:
-                self._set_curve(cid, frames, ys, roi_order)
+                self._set_curve(cid, frames, ys, roi_order, colors)
                 keep.add(cid)
         self._prune(keep)
 

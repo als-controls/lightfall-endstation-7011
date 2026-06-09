@@ -25,6 +25,22 @@ def test_add_roi_assigns_id_and_color(host, qtbot):
     assert len(host.items) > 0
 
 
+def test_color_map_stable_distinct_and_recycled(host, qtbot):
+    from lightfall_endstation_7011.xpcs.plots import ROI_COLORS
+
+    mgr = ROIOverlayManager(host, debounce_ms=0)
+    a = mgr.add_roi(RectShape(0, 0, 8, 8))
+    b = mgr.add_roi(RectShape(10, 10, 8, 8))
+    ca = mgr.color_of(a)
+    assert ca in ROI_COLORS
+    assert ca != mgr.color_of(b)              # distinct colors
+    assert mgr.color_map()[a] == ca           # stable across calls
+    mgr.remove_roi(a)
+    assert a not in mgr.color_map()           # freed on removal
+    c = mgr.add_roi(RectShape(1, 1, 8, 8))
+    assert mgr.color_of(c) == ca              # freed slot recycled
+
+
 def test_roi_changed_signal_carries_geometry(host, qtbot):
     mgr = ROIOverlayManager(host, debounce_ms=0)
     rid = mgr.add_roi(RectShape(10, 20, 64, 64))

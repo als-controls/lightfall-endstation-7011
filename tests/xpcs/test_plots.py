@@ -1,4 +1,5 @@
 import numpy as np
+import pyqtgraph as pg
 import pytest
 
 from lightfall_endstation_7011.xpcs.plots import (
@@ -10,6 +11,40 @@ def test_color_cycle_stable():
     assert color_for("average") is None  # theme default
     assert color_for("roi-a", ["roi-a", "roi-b"]) == ROI_COLORS[0]
     assert color_for("roi-b", ["roi-a", "roi-b"]) == ROI_COLORS[1]
+
+
+def test_color_for_explicit_map_wins_over_position():
+    # an explicit roi_id -> color map (from the overlay) overrides the
+    # positional fallback, so g2 curves match the on-image ROI colors
+    colors = {"roi-b": ROI_COLORS[3]}
+    assert color_for("roi-b", ["roi-b", "roi-a"], colors) == ROI_COLORS[3]
+    assert color_for("average", ["roi-b"], colors) is None
+    # ids not in the map still fall back to positional cycling
+    assert color_for("roi-a", ["roi-b", "roi-a"], colors) == ROI_COLORS[1]
+
+
+def test_g2_plot_paints_curve_with_mapped_color(qtbot):
+    w = G2Plot()
+    qtbot.addWidget(w)
+    colors = {"r1": ROI_COLORS[2]}
+    w.update_from_payload(
+        {"tau": [1.0, 2.0], "g2": {"average": [1.5, 1.0], "r1": [2.0, 1.0]}},
+        colors,
+    )
+    pen = w._curves["r1"].opts["pen"]
+    assert pg.mkColor(pen.color()).name() == pg.mkColor(ROI_COLORS[2]).name()
+
+
+def test_intensity_plot_paints_curve_with_mapped_color(qtbot):
+    w = IntensityPlot()
+    qtbot.addWidget(w)
+    colors = {"r1": ROI_COLORS[4]}
+    w.update_from_payload(
+        {"intensity": {"frame_index": [0, 1], "average": [1.0, 1.1], "r1": [2.0, 2.1]}},
+        colors,
+    )
+    pen = w._curves["r1"].opts["pen"]
+    assert pg.mkColor(pen.color()).name() == pg.mkColor(ROI_COLORS[4]).name()
 
 
 def test_g2_plot_updates_curves(qtbot):

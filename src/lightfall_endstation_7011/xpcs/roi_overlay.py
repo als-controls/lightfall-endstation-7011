@@ -25,14 +25,30 @@ class ROIOverlayManager(QObject):
         self.rois: dict[str, pg.RectROI] = {}
         self._mask_rects: list[pg.RectROI] = []
         self._timers: dict[str, QTimer] = {}
-        self._color_index = 0
+        # Stable roi_id -> color. Colors are recycled on removal so up to
+        # len(ROI_COLORS) live ROIs stay visually distinct, and the same map
+        # is handed to the g2/intensity plots so their curves match.
+        self._colors: dict[str, str] = {}
 
     # --- ROIs ---
 
+    def _allocate_color(self) -> str:
+        in_use = set(self._colors.values())
+        for c in ROI_COLORS:
+            if c not in in_use:
+                return c
+        return ROI_COLORS[len(self._colors) % len(ROI_COLORS)]  # all taken: cycle
+
+    def color_of(self, roi_id: str) -> str | None:
+        return self._colors.get(roi_id)
+
+    def color_map(self) -> dict[str, str]:
+        return dict(self._colors)
+
     def add_roi(self, shape: RectShape, roi_id: str | None = None) -> str:
         roi_id = roi_id or f"roi-{uuid.uuid4().hex[:8]}"
-        color = ROI_COLORS[self._color_index % len(ROI_COLORS)]
-        self._color_index += 1
+        color = self._allocate_color()
+        self._colors[roi_id] = color
         item = pg.RectROI((shape.x, shape.y), (shape.w, shape.h),
                           pen=pg.mkPen(color, width=2), removable=False)
         item.sigRegionChangeFinished.connect(lambda *_: self._debounce(roi_id))
@@ -63,6 +79,7 @@ class ROIOverlayManager(QObject):
 
     def remove_roi(self, roi_id: str) -> None:
         item = self.rois.pop(roi_id, None)
+        self._colors.pop(roi_id, None)   # free the color slot for reuse
         if item is not None:
             self._plot_item.removeItem(item)
             self.roiRemoved.emit(roi_id)
@@ -73,7 +90,7 @@ class ROIOverlayManager(QObject):
     def clear_rois(self) -> None:
         for roi_id in list(self.rois):
             self.remove_roi(roi_id)
-        self._color_index = 0
+        self._colors.clear()
 
     def sync_from_status(self, rois: dict[str, dict]) -> None:
         """Rebuild overlays from a backend status echo (resync path).
@@ -86,7 +103,7 @@ class ROIOverlayManager(QObject):
         for timer in self._timers.values():
             timer.stop()
         self._timers.clear()
-        self._color_index = 0
+        self._colors.clear()
         for roi_id, shape_dict in rois.items():
             self.add_roi(RectShape.from_dict(shape_dict), roi_id=roi_id)
 

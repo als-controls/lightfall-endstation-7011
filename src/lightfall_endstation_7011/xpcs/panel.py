@@ -190,8 +190,9 @@ class XPCSPanel(BasePanel):
     # --- event handlers ---
 
     def _on_g2_updated(self, payload: dict) -> None:
-        self._g2_plot.update_from_payload(payload)
-        self._intensity_plot.update_from_payload(payload)
+        colors = self._roi_overlay.color_map()
+        self._g2_plot.update_from_payload(payload, colors)
+        self._intensity_plot.update_from_payload(payload, colors)
         self._convergence_plot.update_from_payload(payload)
         frames = payload.get("frames_count", 0)
         buf = payload.get("buffer_size", 0)
