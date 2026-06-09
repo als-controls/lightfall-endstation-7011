@@ -63,7 +63,7 @@ class XPCSPanel(BasePanel):
         id="lightfall_endstation_7011.panels.xpcs",
         name="XPCS Live",
         description="Live XPCS g2 correlation: measurement progress, quality, convergence",
-        icon="chart-line",
+        icon="mdi6.chart-sankey",
         category="Analysis",
         singleton=True,
         closable=True,
