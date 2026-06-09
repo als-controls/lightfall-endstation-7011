@@ -59,15 +59,15 @@ class XPCSPanel(BasePanel):
         id="lightfall_endstation_7011.panels.xpcs",
         name="XPCS Live",
         description="Live XPCS g2 correlation: measurement progress, quality, convergence",
-        icon="chart-scatter",
+        icon="chart-line",
         category="Analysis",
         singleton=True,
         closable=True,
         keywords=["xpcs", "g2", "correlation", "live"],
         # NOT "center": that area is the Logbook's (center panels call
-        # setCentralWidget and there is only one). Dock on the right as an
+        # setCentralWidget and there is only one). Dock at the bottom as an
         # on-demand analysis instrument, with a sidebar button.
-        default_area="right",
+        default_area="bottom",
         sidebar_group="top",
     )
 
