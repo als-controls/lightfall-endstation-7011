@@ -17,13 +17,13 @@ def _default_run_engine():
     return get_engine().RE  # reach through the engine wrapper
 
 
-def _default_detector_prefix(start_doc: dict) -> str | None:
-    """Resolve the active detector's ophyd PV prefix from a run start doc.
+def _default_detector_device(start_doc: dict):
+    """Resolve the active detector's ophyd device from a run start doc.
 
     The start doc lists detector device *names* (``doc["detectors"]``, e.g.
-    bp.count populates it); resolve the first one with an image-capable ophyd
-    device via the DeviceCatalog and return its ``.prefix`` (e.g. "13PICAM1:").
-    The backend infers the file PV + frame shape from this prefix.
+    bp.count populates it); resolve the first one with a prefixed ophyd device
+    via the DeviceCatalog. The backend infers its file PV + frame shape from
+    ``device.prefix``; the panel rebuilds its image view onto the device.
     """
     names = start_doc.get("detectors") or []
     if not names:
@@ -34,11 +34,10 @@ def _default_detector_prefix(start_doc: dict) -> str | None:
         for name in names:
             info = catalog.get_device_by_name(name)
             device = getattr(info, "ophyd_device", None) if info else None
-            prefix = getattr(device, "prefix", None)
-            if prefix:
-                return prefix
+            if device is not None and getattr(device, "prefix", None):
+                return device
     except Exception as ex:
-        logger.warning(f"could not resolve detector prefix from start doc: {ex}")
+        logger.warning(f"could not resolve detector device from start doc: {ex}")
     return None
 
 
@@ -68,12 +67,16 @@ class RunBindingController:
         client,
         run_engine_getter: Callable = _default_run_engine,
         credentials_getter: Callable = _default_credentials,
-        detector_prefix_getter: Callable = _default_detector_prefix,
+        detector_getter: Callable = _default_detector_device,
+        on_detector_resolved: Callable | None = None,
     ) -> None:
         self._client = client
         self._get_re = run_engine_getter
         self._get_creds = credentials_getter
-        self._get_detector_prefix = detector_prefix_getter
+        self._get_detector = detector_getter
+        # called with the resolved ophyd device on run start (panel rebuilds
+        # its image view); must be safe to call from the RunEngine thread
+        self._on_detector_resolved = on_detector_resolved
         self._token = None
         self._re = None
         self._bound_uid: str | None = None
@@ -109,9 +112,12 @@ class RunBindingController:
             if name == "start":
                 uid = doc["uid"]
                 tiled_url, api_key, _proxy = self._get_creds()
-                detector_prefix = self._get_detector_prefix(doc)
+                device = self._get_detector(doc)
+                detector_prefix = getattr(device, "prefix", None) if device else None
                 self._client.bind_run(uid, tiled_url=tiled_url, tiled_api_key=api_key,
                                       detector_prefix=detector_prefix)
+                if device is not None and self._on_detector_resolved is not None:
+                    self._on_detector_resolved(device)
                 self._bound_uid = uid
             elif name == "stop":
                 uid = doc.get("run_start") or self._bound_uid

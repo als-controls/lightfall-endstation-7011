@@ -50,6 +50,18 @@ def test_g2_event_updates_plots_and_stats(panel):
     assert "x.h5" in panel._file_label.text()
 
 
+def test_detector_resolved_rebuilds_image_view(panel):
+    from types import SimpleNamespace
+    before = panel._image_widget
+    panel._on_detector_resolved(SimpleNamespace(prefix="13X:", name="mte3test"))
+    assert panel._image_widget is not before          # rebuilt onto the detector
+    assert panel._current_detector_prefix == "13X:"
+    # same detector again -> no rebuild (idempotent)
+    again = panel._image_widget
+    panel._on_detector_resolved(SimpleNamespace(prefix="13X:", name="mte3test"))
+    assert panel._image_widget is again
+
+
 def test_section_event_feeds_sections_plot(panel):
     panel.test_ipc.emit("xpcs.section.completed",
                         {"index": 1, "tau": [1, 2], "g2": {"average": [1.5, 1.0]}})

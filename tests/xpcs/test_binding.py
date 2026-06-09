@@ -68,17 +68,22 @@ def test_other_docs_ignored(fake_ipc):
     assert ipc.published == []
 
 
-def test_start_doc_sends_detector_prefix(fake_ipc):
+def test_start_doc_sends_detector_prefix_and_notifies(fake_ipc):
+    from types import SimpleNamespace
+
     from lightfall_endstation_7011.xpcs.client import XPCSClient
     fake_ipc.replies["xpcs.processing.enable"] = {"status": "ok"}
     client = XPCSClient(ipc=fake_ipc)
     re = MagicMock()
     re.subscribe.return_value = 7
+    device = SimpleNamespace(prefix="13PICAM1:", name="PI_MTE3")
+    resolved = []
     ctl = RunBindingController(
         client=client,
         run_engine_getter=lambda: re,
         credentials_getter=lambda: ("http://t", "key", None),
-        detector_prefix_getter=lambda doc: "13PICAM1:",
+        detector_getter=lambda doc: device,
+        on_detector_resolved=resolved.append,
     )
     ctl.enable()
     callback = re.subscribe.call_args[0][0]
@@ -86,3 +91,23 @@ def test_start_doc_sends_detector_prefix(fake_ipc):
     assert fake_ipc.published == [("xpcs.run.bind", {
         "run_uid": "runX", "tiled_url": "http://t", "tiled_api_key": "key",
         "detector_prefix": "13PICAM1:"})]
+    assert resolved == [device]  # panel notified to rebuild image view
+
+
+def test_start_doc_no_detector_omits_prefix_and_no_notify(fake_ipc):
+    fake_ipc.replies["xpcs.processing.enable"] = {"status": "ok"}
+    from lightfall_endstation_7011.xpcs.client import XPCSClient
+    client = XPCSClient(ipc=fake_ipc)
+    re = MagicMock()
+    re.subscribe.return_value = 7
+    resolved = []
+    ctl = RunBindingController(
+        client=client, run_engine_getter=lambda: re,
+        credentials_getter=lambda: ("http://t", "key", None),
+        detector_getter=lambda doc: None, on_detector_resolved=resolved.append,
+    )
+    ctl.enable()
+    callback = re.subscribe.call_args[0][0]
+    callback("start", {"uid": "runX"})
+    assert "detector_prefix" not in fake_ipc.published[0][1]
+    assert resolved == []

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Callable, ClassVar
 
 from loguru import logger
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -55,6 +55,10 @@ def _default_image_factory(detector_device_name: str):
 
 
 class XPCSPanel(BasePanel):
+    # emitted (possibly from the RunEngine thread) when a run's detector is
+    # resolved; delivered to _on_detector_resolved on the Qt main thread
+    detectorResolved = Signal(object)
+
     panel_metadata: ClassVar[PanelMetadata] = PanelMetadata(
         id="lightfall_endstation_7011.panels.xpcs",
         name="XPCS Live",
@@ -86,8 +90,13 @@ class XPCSPanel(BasePanel):
         self._binding = binding or RunBindingController(client=self._client)
         self._image_factory = image_widget_factory or (
             lambda: _default_image_factory(detector_device_name))
+        self._current_detector_prefix: str | None = None
         super().__init__(parent)
         self._connect_client()
+        # rebuild the image view when a run resolves its detector (queued to
+        # the main thread since the binding fires from the RunEngine thread)
+        self.detectorResolved.connect(self._on_detector_resolved)
+        self._binding._on_detector_resolved = self.detectorResolved.emit
         # defer initial resync off the construction path — status() blocks the
         # calling thread up to its timeout when the backend is away
         QTimer.singleShot(0, self.resync)
@@ -99,7 +108,9 @@ class XPCSPanel(BasePanel):
         # left: image + controls
         left = QWidget()
         left_layout = QVBoxLayout(left)
+        self._left_layout = left_layout
         image_widget, plot_item = self._image_factory()
+        self._image_widget = image_widget
         self._roi_overlay = ROIOverlayManager(plot_item)
         left_layout.addWidget(image_widget, stretch=1)
 
@@ -189,6 +200,36 @@ class XPCSPanel(BasePanel):
 
     def _on_state_changed(self, payload: dict) -> None:
         self._state_label.setText(f"State: {payload.get('state', '?')}")
+
+    def _on_detector_resolved(self, device) -> None:
+        """Rebuild the live image view onto the run's active detector.
+
+        Runs on the Qt main thread (queued from detectorResolved). The backend
+        clears ROIs/mask on a detector switch, so the overlay restarts clean.
+        """
+        prefix = getattr(device, "prefix", None)
+        if prefix and prefix == self._current_detector_prefix:
+            return  # same detector — nothing to rebuild
+        try:
+            from lightfall.ui.widgets.camera.image_view import OphydImageView
+            new_view = OphydImageView(device)
+            new_plot = new_view._plot_item
+        except Exception as ex:
+            logger.warning(f"XPCS: could not build image view for "
+                           f"{getattr(device, 'name', device)!r}: {ex}")
+            return
+        self._left_layout.replaceWidget(self._image_widget, new_view)
+        self._left_layout.setStretchFactor(new_view, 1)
+        self._image_widget.setParent(None)
+        self._image_widget.deleteLater()
+        self._image_widget = new_view
+        # rebuild the ROI/mask overlay on the new image's plot item
+        self._roi_overlay.clear_rois()
+        self._roi_overlay.clear_mask_rects()
+        self._roi_overlay = ROIOverlayManager(new_plot)
+        self._roi_overlay.roiChanged.connect(self._client.set_roi)
+        self._roi_overlay.roiRemoved.connect(self._client.remove_roi)
+        self._current_detector_prefix = prefix
 
     def _on_error(self, payload: dict) -> None:
         self._error_label.setText(payload.get("message", "error"))
