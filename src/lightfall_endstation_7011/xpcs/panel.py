@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -63,7 +64,10 @@ class XPCSPanel(BasePanel):
         singleton=True,
         closable=True,
         keywords=["xpcs", "g2", "correlation", "live"],
-        default_area="center",
+        # NOT "center": that area is the Logbook's (center panels call
+        # setCentralWidget and there is only one). Dock on the right as an
+        # on-demand analysis instrument, with a sidebar button.
+        default_area="right",
         sidebar_group="top",
     )
 
@@ -135,8 +139,13 @@ class XPCSPanel(BasePanel):
         splitter.addWidget(tabs)
         splitter.setSizes([500, 500])
 
-        # bottom: stats strip
-        stats_row = QHBoxLayout()
+        # bottom: stats strip — a thin status bar pinned to its natural
+        # height (the panel content lives in a QScrollArea, so without a
+        # fixed-height container + splitter stretch the row balloons).
+        stats_bar = QWidget()
+        stats_bar.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        stats_row = QHBoxLayout(stats_bar)
+        stats_row.setContentsMargins(6, 2, 6, 2)
         self._state_label = QLabel("State: —")
         self._stats_label = QLabel("Frames: 0")
         self._file_label = QLabel("File: —")
@@ -147,8 +156,8 @@ class XPCSPanel(BasePanel):
         stats_row.addStretch()
         stats_row.addWidget(self._error_label)
 
-        self._layout.addWidget(splitter)
-        self._layout.addLayout(stats_row)
+        self._layout.addWidget(splitter, 1)   # splitter takes the vertical stretch
+        self._layout.addWidget(stats_bar, 0)  # status bar stays at natural height
 
     def _connect_client(self) -> None:
         self._client.g2Updated.connect(self._on_g2_updated)

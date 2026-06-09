@@ -29,6 +29,10 @@ def test_metadata():
     md = XPCSPanel.panel_metadata
     assert md.id == "lightfall_endstation_7011.panels.xpcs"
     assert md.singleton is True
+    # must not hijack the center area (reserved for the Logbook) and must
+    # live in a dockable area so it gets a sidebar button
+    assert md.default_area != "center"
+    assert md.default_area in ("left", "right", "bottom")
 
 
 def test_g2_event_updates_plots_and_stats(panel):
