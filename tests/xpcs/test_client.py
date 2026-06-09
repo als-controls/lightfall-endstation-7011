@@ -35,6 +35,21 @@ def test_bind_and_stop_publish(fake_ipc):
     assert fake_ipc.published[1] == ("xpcs.run.stop", {"run_uid": "uid1"})
 
 
+def test_bind_includes_detector_prefix_when_given(fake_ipc):
+    c = XPCSClient(ipc=fake_ipc)
+    c.bind_run("uid1", tiled_url="http://t", tiled_api_key="k",
+               detector_prefix="13PICAM1:")
+    assert fake_ipc.published[0] == ("xpcs.run.bind", {
+        "run_uid": "uid1", "tiled_url": "http://t", "tiled_api_key": "k",
+        "detector_prefix": "13PICAM1:"})
+
+
+def test_bind_omits_detector_prefix_when_none(fake_ipc):
+    c = XPCSClient(ipc=fake_ipc)
+    c.bind_run("uid1", detector_prefix=None)
+    assert "detector_prefix" not in fake_ipc.published[0][1]
+
+
 def test_status_and_sections(fake_ipc):
     fake_ipc.replies["xpcs.status"] = {"status": "ok", "state": "Idle", "rois": {}}
     fake_ipc.replies["xpcs.sections.get"] = {"status": "ok", "sections": [], "total": 0}

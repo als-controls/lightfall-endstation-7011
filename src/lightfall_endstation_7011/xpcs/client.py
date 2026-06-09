@@ -89,11 +89,16 @@ class XPCSClient(QObject):
 
     # bind/stop are fire-and-forget publishes (run docs must not block on replies)
 
-    def bind_run(self, run_uid: str, tiled_url: str = "", tiled_api_key=None) -> None:
+    def bind_run(self, run_uid: str, tiled_url: str = "", tiled_api_key=None,
+                 detector_prefix: str | None = None) -> None:
         if self._ipc is None:
             return
-        self._ipc.publish("xpcs.run.bind", {
-            "run_uid": run_uid, "tiled_url": tiled_url, "tiled_api_key": tiled_api_key})
+        payload = {
+            "run_uid": run_uid, "tiled_url": tiled_url, "tiled_api_key": tiled_api_key}
+        if detector_prefix:
+            # backend infers file PV + frame shape from this prefix per run
+            payload["detector_prefix"] = detector_prefix
+        self._ipc.publish("xpcs.run.bind", payload)
 
     def run_stop(self, run_uid: str) -> None:
         if self._ipc is None:

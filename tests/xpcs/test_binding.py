@@ -66,3 +66,23 @@ def test_other_docs_ignored(fake_ipc):
     callback("descriptor", {"uid": "d1"})
     callback("event", {"uid": "e1"})
     assert ipc.published == []
+
+
+def test_start_doc_sends_detector_prefix(fake_ipc):
+    from lightfall_endstation_7011.xpcs.client import XPCSClient
+    fake_ipc.replies["xpcs.processing.enable"] = {"status": "ok"}
+    client = XPCSClient(ipc=fake_ipc)
+    re = MagicMock()
+    re.subscribe.return_value = 7
+    ctl = RunBindingController(
+        client=client,
+        run_engine_getter=lambda: re,
+        credentials_getter=lambda: ("http://t", "key", None),
+        detector_prefix_getter=lambda doc: "13PICAM1:",
+    )
+    ctl.enable()
+    callback = re.subscribe.call_args[0][0]
+    callback("start", {"uid": "runX", "detectors": ["PI_MTE3"]})
+    assert fake_ipc.published == [("xpcs.run.bind", {
+        "run_uid": "runX", "tiled_url": "http://t", "tiled_api_key": "key",
+        "detector_prefix": "13PICAM1:"})]
