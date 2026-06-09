@@ -62,6 +62,16 @@ def test_detector_resolved_rebuilds_image_view(panel):
     assert panel._image_widget is again
 
 
+def test_new_run_clears_accumulating_plots(panel):
+    panel.test_ipc.emit("xpcs.state", {"state": "Processing", "run_uid": "run-A"})
+    panel.test_ipc.emit("xpcs.section.completed",
+                        {"index": 1, "tau": [1, 2], "g2": {"average": [1.5, 1.0]}})
+    assert len(panel._sections_plot._section_curves) == 1
+    # a different run resets the backend correlator -> clear the display
+    panel.test_ipc.emit("xpcs.state", {"state": "Processing", "run_uid": "run-B"})
+    assert len(panel._sections_plot._section_curves) == 0
+
+
 def test_section_event_feeds_sections_plot(panel):
     panel.test_ipc.emit("xpcs.section.completed",
                         {"index": 1, "tau": [1, 2], "g2": {"average": [1.5, 1.0]}})

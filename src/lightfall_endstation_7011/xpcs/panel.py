@@ -91,6 +91,7 @@ class XPCSPanel(BasePanel):
         self._image_factory = image_widget_factory or (
             lambda: _default_image_factory(detector_device_name))
         self._current_detector_prefix: str | None = None
+        self._run_uid: str | None = None
         super().__init__(parent)
         self._connect_client()
         # rebuild the image view when a run resolves its detector (queued to
@@ -200,6 +201,18 @@ class XPCSPanel(BasePanel):
 
     def _on_state_changed(self, payload: dict) -> None:
         self._state_label.setText(f"State: {payload.get('state', '?')}")
+        # a new bound run resets the backend correlator; clear the
+        # accumulating plots so the display starts fresh too
+        run_uid = payload.get("run_uid")
+        if run_uid and run_uid != self._run_uid:
+            self._run_uid = run_uid
+            self._clear_plots()
+
+    def _clear_plots(self) -> None:
+        self._g2_plot.clear()
+        self._intensity_plot.clear()
+        self._sections_plot.clear()
+        self._convergence_plot.clear()
 
     def _on_detector_resolved(self, device) -> None:
         """Rebuild the live image view onto the run's active detector.
