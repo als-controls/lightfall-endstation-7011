@@ -7,11 +7,14 @@ deadband without hanging.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 
 from ophyd import Component as Cpt
 from ophyd import EpicsMotor
 from ophyd.positioner import PositionerBase
 from ophyd.signal import EpicsSignalRO
+from ophyd.status import Status
 from ophyd.status import wait as status_wait
 
 logger = logging.getLogger(__name__)
@@ -113,3 +116,65 @@ class DeadbandEpicsMotor(EpicsMotor):
             return status
 
         return super().move(position, wait=wait, **kwargs)
+
+
+class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
+    """EpicsMotor that auto-recovers from mid-move jams.
+
+    Some BCS motors (notably ``beamline_energy``) occasionally stall
+    mid-motion or settle short of target. This subclass watches each move
+    and, on detecting a jam, re-issues the target setpoint up to
+    ``max_attempts`` times. If a batch of attempts is exhausted it asks the
+    user (via a modal dialog) whether to run another batch or fail the move.
+    With no GUI available it fails the move and logs at CRITICAL.
+
+    Recovery runs on a background daemon thread; ``move`` returns a single
+    ``Status`` that resolves only when the move ultimately succeeds or fails,
+    so Bluesky sees one ordinary (slightly longer) move.
+    """
+
+    max_attempts: int = 5
+    stall_timeout: float = 3.0
+    settle_timeout: float = 60.0
+    poll_interval: float = 0.1
+
+    # -- seam methods (mocked in tests; real impls touch EPICS) --------------
+    def _read_position(self) -> float:
+        return self.user_readback.get()
+
+    def _motion_complete(self) -> bool:
+        return bool(self.motor_done_move.get())
+
+    def _issue_setpoint(self, position: float) -> None:
+        self.user_setpoint.put(position, wait=False)
+
+    # -- public entry point --------------------------------------------------
+    def move(self, position, wait=True, *, timeout=None, moved_cb=None, **kwargs):
+        current = self.position
+        tolerance = self._get_move_tolerance()
+        status = Status(obj=self, timeout=timeout)
+        if moved_cb is not None:
+            status.add_callback(lambda *a, **k: moved_cb(obj=self))
+
+        if current is not None and abs(position - current) <= tolerance:
+            logger.info(
+                "%s: requested move to %s within tolerance (%s) of current "
+                "position %s; completing immediately.",
+                self.name, position, tolerance, current,
+            )
+            self._issue_setpoint(position)
+            status.set_finished()
+        else:
+            # Recovery loop added in Task 2; for now just finish optimistically
+            # if already complete, else issue once.
+            self._issue_setpoint(position)
+            if abs(position - self._read_position()) <= tolerance:
+                status.set_finished()
+
+        if wait:
+            try:
+                status_wait(status)
+            except KeyboardInterrupt:
+                self.stop()
+                raise
+        return status
