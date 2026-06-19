@@ -148,9 +148,65 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
     def _issue_setpoint(self, position: float) -> None:
         self.user_setpoint.put(position, wait=False)
 
-    # -- dialog seam (real impl in Task 3) -----------------------------------
+    # -- dialog seam ----------------------------------------------------------
     def _prompt_user_continue(self, attempts: int, position: float) -> bool:
-        return False
+        """Ask the user whether to keep retrying. Returns True to continue.
+
+        Blocks the calling (recovery) thread until the GUI thread answers.
+        With no running QApplication, logs CRITICAL and fails the move.
+        """
+        try:
+            from PySide6.QtWidgets import QApplication
+        except Exception:
+            QApplication = None
+
+        if QApplication is None or QApplication.instance() is None:
+            logger.critical(
+                "%s: jammed and failed to reach %s after %d recovery "
+                "attempt(s); no GUI available to prompt, failing the move.",
+                self.name, position, attempts,
+            )
+            return False
+
+        from lightfall.utils.threads import invoke_in_main_thread
+
+        event = threading.Event()
+        result = {"continue": False}
+        invoke_in_main_thread(
+            self._show_jam_dialog, attempts, position, result, event
+        )
+        event.wait()
+        return result["continue"]
+
+    def _show_jam_dialog(self, attempts, position, result, event):
+        from lightfall.utils.crash_diagnostics import gui_thread_only
+
+        @gui_thread_only
+        def _run():
+            from PySide6.QtWidgets import QMessageBox
+
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setWindowTitle("Beamline energy jam")
+            box.setText(
+                f"{self.name} could not reach {position} after "
+                f"{attempts} recovery attempt(s)."
+            )
+            box.setInformativeText(
+                "Keep retrying (another batch of recovery attempts), "
+                "or treat this move as a failure?"
+            )
+            retry_btn = box.addButton(
+                "Keep retrying", QMessageBox.ButtonRole.AcceptRole
+            )
+            box.addButton("Fail move", QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            result["continue"] = box.clickedButton() is retry_btn
+
+        try:
+            _run()
+        finally:
+            event.set()
 
     # -- recovery internals --------------------------------------------------
     def _attempt_and_watch(self, position: float, status: Status) -> str:

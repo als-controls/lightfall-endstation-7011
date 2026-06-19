@@ -91,3 +91,55 @@ def test_exhaustion_fails_when_user_declines(monkeypatch):
     assert status.done and not status.success
     # 1 initial attempt + max_attempts recovery re-puts
     assert len(puts) == 1 + m.max_attempts
+
+
+def test_continue_choice_runs_another_batch():
+    """When the user chooses 'continue', another batch of attempts runs.
+    First batch jams; second batch reaches target."""
+    m = make_motor()
+    m.max_attempts = 2
+    box = {"calls": 0}
+
+    def read():
+        # After the user is prompted once, start reporting target reached.
+        return 5.0 if box["calls"] else 2.0
+    m._read_position = read
+    m._motion_complete = lambda: True
+    m._issue_setpoint = lambda pos: None
+
+    def prompt(attempts, position):
+        box["calls"] += 1
+        return True  # keep retrying
+    m._prompt_user_continue = prompt
+
+    status = m.move(5.0, wait=False)
+    status.wait(timeout=5)
+
+    assert status.success
+    assert box["calls"] == 1  # prompted once, then recovered next batch
+
+
+def test_headless_fails_and_logs_critical(caplog):
+    """With no QApplication, _prompt_user_continue returns False and logs
+    CRITICAL, so the move fails."""
+    m = make_motor()
+    m.max_attempts = 1
+    m._read_position = lambda: 2.0
+    m._motion_complete = lambda: True
+    m._issue_setpoint = lambda pos: None
+
+    # Force the no-GUI branch regardless of the test environment.
+    import lightfall_endstation_7011.devices.motor as mod
+    import PySide6.QtWidgets as qtw
+    original = qtw.QApplication.instance
+    qtw.QApplication.instance = staticmethod(lambda: None)
+    try:
+        with caplog.at_level(logging.CRITICAL):
+            status = m.move(5.0, wait=False)
+            with pytest.raises(RuntimeError):
+                status.wait(timeout=5)
+    finally:
+        qtw.QApplication.instance = original
+
+    assert status.done and not status.success
+    assert any(r.levelno >= logging.CRITICAL for r in caplog.records)
