@@ -201,3 +201,103 @@ def test_subdeadband_move_short_circuits():
 
     assert status.success
     assert puts == [5.05]
+
+
+def test_no_false_jam_on_dmov_startup_delay():
+    """FIX 1: DMOV stays 1 (idle) for the first few polls after a put before
+    the motor record begins moving.  This must NOT be treated as a
+    settled-off-target jam; the move should succeed with exactly ONE setpoint
+    put (no spurious recovery re-put).
+
+    Scenario (wall-time driven, using a separate 'phase' flag):
+      phase 'startup': _motion_complete=True (DMOV=1, idle), pos=0.0
+        — held for ~3 polls then advanced by the setpoint counter trick
+      phase 'moving' : _motion_complete=False (DMOV=0, moving), pos=0.0
+      phase 'done'   : _motion_complete=True (DMOV=1, done), pos=5.0
+
+    We drive phase transitions off the number of times _motion_complete is
+    called (independent of _read_position) so the two seams are decoupled.
+    """
+    m = make_motor()
+    m.start_timeout = 1.0   # must be a known attribute after fix
+
+    mc_calls = {"n": 0}
+
+    def motion_complete():
+        n = mc_calls["n"]
+        mc_calls["n"] += 1
+        # idle for first 3 calls (startup), then moving for next 4, then done
+        if n < 3:
+            return True    # DMOV=1, not yet started
+        if n < 7:
+            return False   # DMOV=0, moving
+        return True        # DMOV=1, arrived
+
+    rp_calls = {"n": 0}
+
+    def read_position():
+        n = rp_calls["n"]
+        rp_calls["n"] += 1
+        # report target reached after 8 read calls (motor_complete has seen 7)
+        if n < 8:
+            return 0.0
+        return 5.0
+
+    puts = []
+
+    def issue_setpoint(pos):
+        puts.append(pos)
+
+    m._motion_complete = motion_complete
+    m._read_position = read_position
+    m._issue_setpoint = issue_setpoint
+
+    # start is far from target so the null-move fast-path is NOT taken
+    m.user_readback.sim_put(0.0)
+
+    status = m.move(5.0, wait=False)
+    status.wait(timeout=5)
+
+    assert status.success, "move must succeed (no false jam)"
+    assert len(puts) == 1, (
+        f"expected exactly 1 setpoint put (no spurious recovery), got {len(puts)}"
+    )
+
+
+def test_stop_wakes_dialog_wait():
+    """FIX 2: stop() must unblock a worker waiting in _prompt_user_continue.
+
+    We simulate the dialog-blocking path: monkeypatch _prompt_user_continue so
+    it stores a real threading.Event as self._prompt_event and blocks on it,
+    then call m.stop() from a timer and assert the move ends failed without
+    hanging.
+    """
+    import threading as _t
+
+    m = make_motor()
+    m.stall_timeout = 10.0
+    m.settle_timeout = 10.0
+    m._read_position = lambda: 2.0       # never reaches 5.0
+    m._motion_complete = lambda: True    # settled-off-target every time
+    m._issue_setpoint = lambda pos: None
+    m.max_attempts = 1                   # exhaust after one attempt quickly
+
+    # Simulate the blocking dialog path with a real Event stored on self.
+    def blocking_prompt(attempts, position):
+        ev = _t.Event()
+        m._prompt_event = ev
+        ev.wait()  # blocks until stop() sets it
+        if m._jam_abort.is_set():
+            return False
+        return True
+
+    m._prompt_user_continue = blocking_prompt
+
+    status = m.move(5.0, wait=False)
+    # Fire stop() 50 ms after the dialog starts blocking.
+    _t.Timer(0.05, m.stop).start()
+
+    with pytest.raises(RuntimeError):
+        status.wait(timeout=5)
+
+    assert status.done and not status.success

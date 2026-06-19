@@ -131,12 +131,22 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
     Recovery runs on a background daemon thread; ``move`` returns a single
     ``Status`` that resolves only when the move ultimately succeeds or fails,
     so Bluesky sees one ordinary (slightly longer) move.
+
+    Known trade-offs
+    ----------------
+    * ``move()`` returns a generic ``ophyd.status.Status``, not a
+      ``MoveStatus``, so per-move progress (``status.watch()``) is not
+      reported to the RunEngine.
+    * ``stop()`` errors any in-flight move; the RunEngine calls ``stop`` on
+      pause/suspend as well as abort, though in practice the move's status is
+      already done by then.
     """
 
     max_attempts: int = 5
     stall_timeout: float = 3.0
     settle_timeout: float = 60.0
     poll_interval: float = 0.1
+    start_timeout: float = 1.0
 
     # -- seam methods (mocked in tests; real impls touch EPICS) --------------
     def _read_position(self) -> float:
@@ -172,10 +182,16 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
 
         event = threading.Event()
         result = {"continue": False}
-        invoke_in_main_thread(
-            self._show_jam_dialog, attempts, position, result, event
-        )
-        event.wait()
+        self._prompt_event = event
+        try:
+            invoke_in_main_thread(
+                self._show_jam_dialog, attempts, position, result, event
+            )
+            event.wait()
+        finally:
+            self._prompt_event = None
+        if self._jam_abort.is_set():
+            return False
         return result["continue"]
 
     def _show_jam_dialog(self, attempts, position, result, event):
@@ -213,28 +229,48 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
         """Issue the setpoint and watch until target reached or a jam.
 
         Returns 'reached' or 'jammed'. Honors status.done (timeout/abort).
+
+        A ``start_timeout`` grace window is allowed after the setpoint put
+        before DMOV=1 (idle) is treated as a settled-off-target jam. On real
+        EPICS the motor record can briefly remain DMOV=1 after a ``.VAL`` put
+        before motion begins; treating that as jammed would trigger a spurious
+        recovery re-put on every healthy move.
         """
         tolerance = self._get_move_tolerance()
         self._issue_setpoint(position)
         last_pos = self._read_position()
-        last_progress = time.monotonic()
-        deadline = last_progress + self.settle_timeout
+        loop_start = time.monotonic()
+        last_progress = loop_start
+        start_deadline = loop_start + self.start_timeout
+        deadline = loop_start + self.settle_timeout
+        started = False  # True once DMOV=0 (moving) is observed
 
         while not status.done and not self._jam_abort.is_set():
             time.sleep(self.poll_interval)
             now = time.monotonic()
             pos = self._read_position()
+
+            # Target reached — success regardless of DMOV.
             if abs(position - pos) <= tolerance:
                 return "reached"
-            if abs(pos - last_pos) > tolerance:
-                last_pos = pos
-                last_progress = now
-            if self._motion_complete():
-                return "jammed"  # settled short of target
-            if now - last_progress >= self.stall_timeout:
-                return "jammed"  # no progress while still "moving"
+
+            moving = not self._motion_complete()
+            if moving:
+                started = True
+                if abs(pos - last_pos) > tolerance:
+                    last_pos = pos
+                    last_progress = now
+                if now - last_progress >= self.stall_timeout:
+                    return "jammed"  # no progress while still "moving"
+            else:
+                # DMOV=1 (idle): only diagnose as settled-off-target once
+                # motion has been observed OR the start-grace window is over.
+                if started or now >= start_deadline:
+                    return "jammed"  # settled short of target
+
             if now >= deadline:
                 return "jammed"  # overall settle ceiling
+
         if self._jam_abort.is_set() and not status.done:
             status.set_exception(RuntimeError(f"{self.name}: move aborted."))
         return "jammed"
@@ -276,7 +312,7 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                 if self._jam_abort.is_set():
                     break
 
-                # Batch exhausted: ask the user (Task 3 wires the dialog).
+                # Batch exhausted: ask the user whether to keep retrying.
                 if self._prompt_user_continue(attempts, position):
                     logger.info(
                         "%s: user chose to keep retrying after %d attempt(s).",
@@ -338,6 +374,9 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
         abort = getattr(self, "_jam_abort", None)
         if abort is not None:
             abort.set()
+        prompt_event = getattr(self, "_prompt_event", None)
+        if prompt_event is not None:
+            prompt_event.set()
         try:
             super().stop(success=success)
         except Exception:
