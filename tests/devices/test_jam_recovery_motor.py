@@ -74,7 +74,7 @@ def test_settled_off_target_then_recovers():
     assert state["puts"] >= 2
 
 
-def test_exhaustion_fails_when_user_declines(monkeypatch):
+def test_exhaustion_fails_when_user_declines():
     """If every attempt jams and the user declines (placeholder returns
     False), the status errors after max_attempts re-puts."""
     m = make_motor()
@@ -129,7 +129,6 @@ def test_headless_fails_and_logs_critical(caplog):
     m._issue_setpoint = lambda pos: None
 
     # Force the no-GUI branch regardless of the test environment.
-    import lightfall_endstation_7011.devices.motor as mod
     import PySide6.QtWidgets as qtw
     original = qtw.QApplication.instance
     qtw.QApplication.instance = staticmethod(lambda: None)
@@ -143,3 +142,40 @@ def test_headless_fails_and_logs_critical(caplog):
 
     assert status.done and not status.success
     assert any(r.levelno >= logging.CRITICAL for r in caplog.records)
+
+
+def test_stop_interrupts_recovery_and_errors_status():
+    """Calling stop() during a jam recovery halts the loop and errors the
+    status (does not hang)."""
+    import threading as _t
+    m = make_motor()
+    m.stall_timeout = 10.0     # ensure it would otherwise loop a long time
+    m.settle_timeout = 10.0
+    m._read_position = lambda: 2.0      # never reaches 5.0
+    m._motion_complete = lambda: False  # stalled, slow path
+    m._issue_setpoint = lambda pos: None
+
+    status = m.move(5.0, wait=False)
+    # Give the worker a moment to enter the watch loop, then stop.
+    _t.Timer(0.05, m.stop).start()
+    with pytest.raises(RuntimeError):
+        status.wait(timeout=5)
+
+    assert status.done and not status.success
+
+
+def test_setpoint_put_failure_errors_status():
+    """If issuing the setpoint raises, the move fails rather than hanging."""
+    m = make_motor()
+    m._read_position = lambda: 0.0
+    m._motion_complete = lambda: False
+
+    def boom(pos):
+        raise RuntimeError("PV disconnected")
+    m._issue_setpoint = boom
+
+    status = m.move(5.0, wait=False)
+    with pytest.raises(RuntimeError):
+        status.wait(timeout=5)
+
+    assert status.done and not status.success

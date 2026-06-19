@@ -220,7 +220,7 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
         last_progress = time.monotonic()
         deadline = last_progress + self.settle_timeout
 
-        while not status.done:
+        while not status.done and not self._jam_abort.is_set():
             time.sleep(self.poll_interval)
             now = time.monotonic()
             pos = self._read_position()
@@ -235,12 +235,14 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                 return "jammed"  # no progress while still "moving"
             if now >= deadline:
                 return "jammed"  # overall settle ceiling
+        if self._jam_abort.is_set() and not status.done:
+            status.set_exception(RuntimeError(f"{self.name}: move aborted."))
         return "jammed"
 
     def _run_recovery(self, position: float, status: Status, moved_cb) -> None:
         try:
             attempts = 0
-            while not status.done:
+            while not status.done and not self._jam_abort.is_set():
                 outcome = self._attempt_and_watch(position, status)
                 if outcome == "reached":
                     if not status.done:
@@ -252,10 +254,9 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                         status.set_finished()
                     return
 
-                recovered = False
                 for _ in range(self.max_attempts):
-                    if status.done:
-                        return
+                    if status.done or self._jam_abort.is_set():
+                        break
                     attempts += 1
                     logger.warning(
                         "%s: jam detected; recovery attempt %d/%d "
@@ -272,6 +273,9 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                             status.set_finished()
                         return
 
+                if self._jam_abort.is_set():
+                    break
+
                 # Batch exhausted: ask the user (Task 3 wires the dialog).
                 if self._prompt_user_continue(attempts, position):
                     logger.info(
@@ -287,6 +291,9 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                         )
                     )
                 return
+
+            if not status.done:
+                status.set_exception(RuntimeError(f"{self.name}: move aborted."))
         except Exception as exc:  # never let the worker thread die silently
             logger.exception("%s: recovery loop crashed.", self.name)
             if not status.done:
@@ -309,6 +316,7 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
             self._issue_setpoint(position)
             status.set_finished()
         else:
+            self._jam_abort = threading.Event()
             thread = threading.Thread(
                 target=self._run_recovery,
                 args=(position, status, moved_cb),
@@ -324,3 +332,13 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
                 self.stop()
                 raise
         return status
+
+    def stop(self, *, success: bool = False):
+        """Stop the motor and halt any in-progress jam recovery."""
+        abort = getattr(self, "_jam_abort", None)
+        if abort is not None:
+            abort.set()
+        try:
+            super().stop(success=success)
+        except Exception:
+            logger.exception("%s: error while stopping underlying motor.", self.name)
