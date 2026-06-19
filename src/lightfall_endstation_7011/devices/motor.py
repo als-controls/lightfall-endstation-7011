@@ -148,6 +148,94 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
     def _issue_setpoint(self, position: float) -> None:
         self.user_setpoint.put(position, wait=False)
 
+    # -- dialog seam (real impl in Task 3) -----------------------------------
+    def _prompt_user_continue(self, attempts: int, position: float) -> bool:
+        return False
+
+    # -- recovery internals --------------------------------------------------
+    def _attempt_and_watch(self, position: float, status: Status) -> str:
+        """Issue the setpoint and watch until target reached or a jam.
+
+        Returns 'reached' or 'jammed'. Honors status.done (timeout/abort).
+        """
+        tolerance = self._get_move_tolerance()
+        self._issue_setpoint(position)
+        last_pos = self._read_position()
+        last_progress = time.monotonic()
+        deadline = last_progress + self.settle_timeout
+
+        while not status.done:
+            time.sleep(self.poll_interval)
+            now = time.monotonic()
+            pos = self._read_position()
+            if abs(position - pos) <= tolerance:
+                return "reached"
+            if abs(pos - last_pos) > tolerance:
+                last_pos = pos
+                last_progress = now
+            if self._motion_complete():
+                return "jammed"  # settled short of target
+            if now - last_progress >= self.stall_timeout:
+                return "jammed"  # no progress while still "moving"
+            if now >= deadline:
+                return "jammed"  # overall settle ceiling
+        return "jammed"
+
+    def _run_recovery(self, position: float, status: Status, moved_cb) -> None:
+        try:
+            attempts = 0
+            while not status.done:
+                outcome = self._attempt_and_watch(position, status)
+                if outcome == "reached":
+                    if not status.done:
+                        if attempts:
+                            logger.info(
+                                "%s: recovered to %s after %d attempt(s).",
+                                self.name, position, attempts,
+                            )
+                        status.set_finished()
+                    return
+
+                recovered = False
+                for _ in range(self.max_attempts):
+                    if status.done:
+                        return
+                    attempts += 1
+                    logger.warning(
+                        "%s: jam detected; recovery attempt %d/%d "
+                        "(re-issuing setpoint %s).",
+                        self.name, attempts, self.max_attempts, position,
+                    )
+                    outcome = self._attempt_and_watch(position, status)
+                    if outcome == "reached":
+                        if not status.done:
+                            logger.info(
+                                "%s: recovered to %s after %d attempt(s).",
+                                self.name, position, attempts,
+                            )
+                            status.set_finished()
+                        return
+
+                # Batch exhausted: ask the user (Task 3 wires the dialog).
+                if self._prompt_user_continue(attempts, position):
+                    logger.info(
+                        "%s: user chose to keep retrying after %d attempt(s).",
+                        self.name, attempts,
+                    )
+                    continue
+                if not status.done:
+                    status.set_exception(
+                        RuntimeError(
+                            f"{self.name}: failed to reach {position} after "
+                            f"{attempts} recovery attempt(s)."
+                        )
+                    )
+                return
+        except Exception as exc:  # never let the worker thread die silently
+            logger.exception("%s: recovery loop crashed.", self.name)
+            if not status.done:
+                status.set_exception(exc)
+
     # -- public entry point --------------------------------------------------
     def move(self, position, wait=True, *, timeout=None, moved_cb=None, **kwargs):
         current = self.position
@@ -165,11 +253,13 @@ class JamRecoveryEpicsMotor(DeadbandEpicsMotor):
             self._issue_setpoint(position)
             status.set_finished()
         else:
-            # Recovery loop added in Task 2; for now just finish optimistically
-            # if already complete, else issue once.
-            self._issue_setpoint(position)
-            if abs(position - self._read_position()) <= tolerance:
-                status.set_finished()
+            thread = threading.Thread(
+                target=self._run_recovery,
+                args=(position, status, moved_cb),
+                name=f"{self.name}-jam-recovery",
+                daemon=True,
+            )
+            thread.start()
 
         if wait:
             try:
