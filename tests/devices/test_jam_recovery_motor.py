@@ -220,6 +220,15 @@ def test_no_false_jam_on_dmov_startup_delay():
     """
     m = make_motor()
     m.start_timeout = 1.0   # must be a known attribute after fix
+    # This test isolates the startup-grace / settled-off-target path. The
+    # phases below advance by CALL COUNT, but the stall and settle checks are
+    # WALL-CLOCK based; with make_motor()'s tiny defaults the count-driven
+    # "moving, no-progress" window could trip the wall-clock stall timer
+    # depending on OS sleep granularity (flaky). Raise both ceilings so only
+    # the count-driven "reached" exit applies — the stall path is covered by
+    # test_stall_then_recovers_on_reput.
+    m.stall_timeout = 5.0
+    m.settle_timeout = 5.0
 
     mc_calls = {"n": 0}
 
