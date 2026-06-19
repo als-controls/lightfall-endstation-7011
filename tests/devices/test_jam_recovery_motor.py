@@ -179,3 +179,25 @@ def test_setpoint_put_failure_errors_status():
         status.wait(timeout=5)
 
     assert status.done and not status.success
+
+
+def test_exported_from_devices_package():
+    from lightfall_endstation_7011 import devices
+    assert devices.JamRecoveryEpicsMotor is JamRecoveryEpicsMotor
+
+
+def test_subdeadband_move_short_circuits():
+    """Inherited DeadbandEpicsMotor behavior: a move within tolerance of the
+    current position completes immediately without spawning recovery."""
+    m = make_motor()
+    m._read_position = lambda: 5.0
+    m._motion_complete = lambda: True
+    puts = []
+    m._issue_setpoint = lambda pos: puts.append(pos)
+
+    # current position ~5.0; request 5.05 with tolerance 0.1 => null move.
+    m.user_readback.sim_put(5.0)  # FakeEpicsSignal: set readback for .position
+    status = m.move(5.05, wait=True)
+
+    assert status.success
+    assert puts == [5.05]

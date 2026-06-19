@@ -4,12 +4,14 @@ from lightfall_endstation_7011.devices.andor import Andor
 from lightfall_endstation_7011.devices.diode import DetectorDiode
 from lightfall_endstation_7011.devices.lakeshore import LakeShore336
 from lightfall_endstation_7011.devices.motor import DeadbandEpicsMotor
+from lightfall_endstation_7011.devices.motor import JamRecoveryEpicsMotor
 from lightfall_endstation_7011.devices.pimte3 import PIMTE3
 
 __all__ = [
     "Andor",
     "DeadbandEpicsMotor",
     "DetectorDiode",
+    "JamRecoveryEpicsMotor",
     "LakeShore336",
     "PIMTE3",
 ]
