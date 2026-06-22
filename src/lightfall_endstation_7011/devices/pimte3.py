@@ -18,6 +18,7 @@ from ophyd import (
     EpicsSignalWithRBV,
     HDF5Plugin,
     ImagePlugin,
+    Kind,
     SingleTrigger,
     Staged,
 )
@@ -152,6 +153,10 @@ class KeepOpenClosed(AreaDetectorCam):
 
     readout_time = Cpt(EpicsSignalRO, "ReadoutTimeCalc")
     shutter_timing_mode = Cpt(EpicsSignalWithRBV, "ShutterTimingMode")
+    # Override the generic CamBase `shutter_mode` (which targets the
+    # "ShutterMode" PV) so the device-panel dropdown drives the PIMTE's
+    # "ShutterTimingMode" PV instead.
+    shutter_mode = Cpt(EpicsSignalWithRBV, "ShutterTimingMode")
 
     _default_configuration_attrs = AreaDetectorCam._default_configuration_attrs + (
         "shutter_timing_mode",
@@ -227,7 +232,15 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Do not assert an image mode on stage. Each plan is responsible
+        # for selecting the camera image mode it needs at its start
+        # (e.g. "Multiple" for step scans, "Continuous" for
+        # continuous_acquire). Dropping the default stage sig keeps staging
+        # from clobbering the mode the plan deliberately set.
         self.stage_sigs.pop("cam.image_mode", None)
+        # Surface the full-frame summed counts (ROIStat total) as the
+        # hinted field so live plots / best-effort callbacks default to it.
+        self.roi_stat1.total.kind = Kind.hinted
 
     def stage(self):
         if self._staged == Staged.yes:
