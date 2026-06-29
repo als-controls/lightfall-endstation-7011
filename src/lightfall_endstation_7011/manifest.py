@@ -62,5 +62,11 @@ manifest = PluginManifest(
             name="xpcs",
             import_path="lightfall_endstation_7011.xpcs.plugin:XPCSPanelPlugin",
         ),
+        # Monitor plugin: proactive speckle/dynamics feed
+        PluginEntry(
+            type_name="monitor",
+            name="xpcs_dynamics",
+            import_path="lightfall_endstation_7011.xpcs.monitor:XPCSMonitorPlugin",
+        ),
     ],
 )
