@@ -13,6 +13,7 @@ import time
 from ophyd import Component as Cpt
 from ophyd import EpicsMotor
 from ophyd.positioner import PositionerBase
+from ophyd.signal import EpicsSignal
 from ophyd.signal import EpicsSignalRO
 from ophyd.status import Status
 from ophyd.status import wait as status_wait
@@ -52,11 +53,50 @@ class DeadbandEpicsMotor(EpicsMotor):
             move_tolerance = 0.005
     """
 
-    retry_deadband = Cpt(EpicsSignalRO, ".RDBD", kind="config", auto_monitor=True)
+    retry_deadband = Cpt(EpicsSignal, ".RDBD", kind="config", auto_monitor=True)
 
     # If set to a positive number, overrides retry_deadband for the
     # null-move check. ``None`` means "use the motor record's .RDBD".
     move_tolerance: float | None = None
+
+    def __init__(self, *args, deadband: float | None = None, **kwargs):
+        self._init_deadband = deadband
+        self._deadband_applied = False
+        super().__init__(*args, **kwargs)
+        if deadband is not None:
+            # Put on init. If the PV is already connected (e.g. fakes, or a
+            # warm CA connection) apply inline; otherwise wait for the connect
+            # transition via a meta subscription (fires once, guarded).
+            if self.retry_deadband.connected:
+                self._apply_init_deadband(connected=True)
+            else:
+                self.retry_deadband.subscribe(
+                    self._apply_init_deadband,
+                    event_type=self.retry_deadband.SUB_META,
+                    run=False,
+                )
+
+    def _apply_init_deadband(self, *args, connected: bool = False, **kwargs) -> None:
+        """Write the requested deadband to ``.RDBD`` once, when connected.
+
+        Idempotent: only the first successful apply writes. A failed put is
+        logged at WARNING and swallowed so device init / scans never break.
+        Skips the put when ``.RDBD`` already matches the requested value.
+        """
+        if self._deadband_applied or not connected or self._init_deadband is None:
+            return
+        try:
+            current = self.retry_deadband.get()
+            if current is None or abs(current - self._init_deadband) > 1e-9:
+                self.retry_deadband.put(self._init_deadband)
+            self._deadband_applied = True
+        except Exception:
+            logger.warning(
+                "%s: could not apply init deadband %s to .RDBD.",
+                self.name,
+                self._init_deadband,
+                exc_info=True,
+            )
 
     def _get_move_tolerance(self) -> float:
         """Return the tolerance below which a move is considered a no-op."""

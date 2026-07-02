@@ -4,11 +4,15 @@ from __future__ import annotations
 import logging
 
 import pytest
-from ophyd.sim import make_fake_device
+from ophyd.sim import make_fake_device, FakeEpicsSignal
 
-from lightfall_endstation_7011.devices.motor import JamRecoveryEpicsMotor
+from lightfall_endstation_7011.devices.motor import (
+    DeadbandEpicsMotor,
+    JamRecoveryEpicsMotor,
+)
 
 FakeJamMotor = make_fake_device(JamRecoveryEpicsMotor)
+FakeDeadbandMotor = make_fake_device(DeadbandEpicsMotor)
 
 
 def make_motor(**attrs):
@@ -310,3 +314,49 @@ def test_stop_wakes_dialog_wait():
         status.wait(timeout=5)
 
     assert status.done and not status.success
+
+
+def test_deadband_written_on_init():
+    """Providing deadband= writes the value to .RDBD once the PV is connected.
+
+    Fake signals report connected=True immediately, so the value is applied
+    during __init__ via the 'already connected' branch."""
+    m = FakeDeadbandMotor("FAKE:MOT", name="e", deadband=0.05)
+    assert m.retry_deadband.get() == 0.05
+    assert m._deadband_applied is True
+
+
+def test_no_deadband_arg_leaves_rdbd_untouched():
+    """Omitting deadband= performs no write and preserves existing behavior."""
+    m = FakeDeadbandMotor("FAKE:MOT", name="e")
+    assert m.retry_deadband.get() == 0  # fake default, untouched
+    assert m._deadband_applied is False
+
+
+def test_deadband_redundant_value_skips_put():
+    """When .RDBD already equals the requested value, no put is issued."""
+    m = FakeDeadbandMotor("FAKE:MOT", name="e", deadband=0.05)  # now at 0.05
+    m._deadband_applied = False  # re-arm to observe the guard
+    calls = []
+    m.retry_deadband.put = lambda *a, **k: calls.append(a)
+    m._apply_init_deadband(connected=True)
+    assert calls == []               # current already 0.05 => guarded out
+    assert m._deadband_applied is True
+
+
+def test_deadband_put_failure_is_swallowed(caplog):
+    """A failing put logs WARNING and does not propagate out of __init__."""
+    original = FakeEpicsSignal.put
+
+    def boom(self, *a, **k):
+        raise RuntimeError("PV write failed")
+
+    FakeEpicsSignal.put = boom
+    try:
+        with caplog.at_level(logging.WARNING):
+            m = FakeDeadbandMotor("FAKE:MOT", name="e", deadband=0.05)  # must NOT raise
+    finally:
+        FakeEpicsSignal.put = original
+
+    assert m._deadband_applied is False
+    assert any(r.levelno >= logging.WARNING for r in caplog.records)
