@@ -1,4 +1,3 @@
-import math
 
 from lightfall.monitor.data_window import DataWindow
 from lightfall.monitor.models import ExperimentContext
