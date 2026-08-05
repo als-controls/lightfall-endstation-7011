@@ -14,7 +14,7 @@ def test_metadata():
 
 
 def test_system_prompt_covers_devices_and_rules():
-    body = ReflectionAlignmentAgent().get_system_prompt()
+    body = ReflectionAlignmentAgent().get_skill_dir().joinpath("SKILL.md").read_text(encoding="utf-8")
     assert body.strip(), "system prompt must not be empty"
     for token in (
         "sample_lift",
@@ -53,7 +53,7 @@ def test_exposes_mcp_tools():
 
 def test_system_prompt_covers_new_alignment_rules():
     """Issue 1, 2, 3, 9 - the prompt must teach the agent the new rules."""
-    body = ReflectionAlignmentAgent().get_system_prompt()
+    body = ReflectionAlignmentAgent().get_skill_dir().joinpath("SKILL.md").read_text(encoding="utf-8")
     for token in (
         # Issue 1: explicit canonical detector enforcement.
         "ONLY detector",
@@ -80,7 +80,7 @@ def test_manifest_registers_reflection_alignment():
 
     entry = next((p for p in manifest.plugins if p.name == "reflection_alignment"), None)
     assert entry is not None, "reflection_alignment not registered in manifest"
-    assert entry.type_name == "agent"
+    assert entry.type_name == "tool"
     assert entry.import_path == (
         "lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
     )

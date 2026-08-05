@@ -14,7 +14,7 @@ def test_blackfly_agent_metadata():
 
 def test_blackfly_agent_system_prompt_non_empty():
     """Skill body must be non-empty and reference the public API entry points."""
-    body = BlackflyAgent().get_system_prompt()
+    body = BlackflyAgent().get_skill_dir().joinpath("SKILL.md").read_text(encoding="utf-8")
     assert body.strip(), "system prompt must not be empty"
     # The prompt must teach the agent the public import paths.
     assert "lightfall.ui.widgets.observers" in body
@@ -27,7 +27,7 @@ def test_blackfly_agent_exposes_one_mcp_tool():
     """create_tools returns exactly the discover_blackfly_cameras tool.
 
     Skipped gracefully when claude_agent_sdk is not installed in the venv —
-    in that case, AgentPlugin.create_tools returns []; the production runtime
+    in that case, ToolPlugin.create_tools returns []; the production runtime
     handles the missing-SDK case identically (tool surface is empty).
     """
     tools = BlackflyAgent().create_tools()

@@ -37,21 +37,21 @@ manifest = PluginManifest(
         ),
         # Agent plugin: Blackfly observer skill (discover + panel-creation workflow)
         PluginEntry(
-            type_name="agent",
+            type_name="tool",
             name="blackfly",
             import_path="lightfall_endstation_7011.observers.blackfly.skill:BlackflyAgent",
             metadata={"priority": 30},
         ),
         # Agent plugin: endstation user-support triage skill
         PluginEntry(
-            type_name="agent",
+            type_name="tool",
             name="endstation_support",
             import_path="lightfall_endstation_7011.support.skill:EndstationSupportAgent",
             metadata={"priority": 20},
         ),
         # Agent plugin: reflection-geometry sample alignment skill
         PluginEntry(
-            type_name="agent",
+            type_name="tool",
             name="reflection_alignment",
             import_path="lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent",
             metadata={"priority": 30},

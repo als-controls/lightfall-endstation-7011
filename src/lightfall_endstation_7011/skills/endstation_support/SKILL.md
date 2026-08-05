@@ -1,0 +1,39 @@
+---
+name: endstation-support
+description: "Beamline 7.0.1.1 user-support triage: guided checks for common endstation problems."
+---
+
+## Endstation 7.0.1.1 User-Support Skill
+
+Use this skill when a user at ALS beamline 7.0.1.1 reports an operational
+problem covered by the topics below. Match the user's wording against the topic
+table, then follow that topic's reference file.
+
+### Safety rules (apply to every topic)
+
+1. **Reads auto-run; writes and moves are propose-then-confirm.** Never set a
+   value or move a motor without first stating the exact device and target value
+   and getting the user's explicit OK. Only then call `ncs_set_device` or
+   `ncs_move_motor` (both DEVICE_CONTROL-gated).
+2. **Catalog-or-manual.** Resolve a named device with `ncs_list_devices` /
+   `ncs_read_device`. If it is not registered or not readable that way, ask the
+   user to check or change it manually in CSS-Phoebus, citing the PV name and
+   expected value. Do not invent raw channel access.
+
+### Topics
+
+| Topic | Use when the user says… | Read this file |
+|-------|--------------------------|----------------|
+| Detector shows no signal | "can't see anything on the detector", blank CCD, no counts/signal | `references/detector_no_signal.md` |
+
+### Tools to use
+
+`ncs_get_beam_status`, `ncs_list_devices`, `ncs_read_device`,
+`ncs_get_device_state`, `ncs_set_device`, `ncs_move_motor`.
+
+### How to respond
+
+Identify the matching topic, read its reference file, and follow it step by
+step: run the AUTO checks yourself, ask the user to perform the MANUAL ones, and
+for CONFIRM steps propose the exact change and wait for an explicit OK before
+executing.

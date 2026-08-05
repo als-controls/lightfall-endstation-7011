@@ -18,7 +18,7 @@ def test_support_agent_has_no_tools():
 
 
 def test_support_agent_system_prompt_is_a_router():
-    body = EndstationSupportAgent().get_system_prompt()
+    body = EndstationSupportAgent().get_skill_dir().joinpath("SKILL.md").read_text(encoding="utf-8")
     assert body.strip(), "system prompt must not be empty"
     # Both global safety rules must be present.
     assert "propose-then-confirm" in body
@@ -65,7 +65,7 @@ def test_manifest_registers_support_agent():
     entries = [p for p in manifest.plugins if p.name == "endstation_support"]
     assert len(entries) == 1, "expected exactly one endstation_support entry"
     entry = entries[0]
-    assert entry.type_name == "agent"
+    assert entry.type_name == "tool"
     assert (
         entry.import_path
         == "lightfall_endstation_7011.support.skill:EndstationSupportAgent"
