@@ -241,6 +241,16 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
         # Surface the full-frame summed counts (ROIStat total) as the
         # hinted field so live plots / best-effort callbacks default to it.
         self.roi_stat1.total.kind = Kind.hinted
+        # Make ROI/binning settings visible in configuration documents.
+        # AreaDetectorCam._default_read_attrs=() strips Kind.normal from all
+        # cam signals at instantiation; restore the ones we care about here.
+        for sig in [
+            self.cam.min_x, self.cam.min_y,
+            self.cam.size.size_x, self.cam.size.size_y,
+            self.cam.max_size.max_size_x, self.cam.max_size.max_size_y,
+            self.cam.bin_x, self.cam.bin_y,
+        ]:
+            sig.kind = Kind.config
 
     def stage(self):
         if self._staged == Staged.yes:

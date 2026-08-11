@@ -18,6 +18,7 @@ from ophyd import (
     EpicsSignalWithRBV,
     HDF5Plugin,
     ImagePlugin,
+    Kind,
     SingleTrigger,
     Staged,
 )
@@ -189,6 +190,16 @@ class Andor(StageOnFirstTrigger, SingleTrigger, AndorDetector):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.stage_sigs.update({"cam.image_mode": 1})
+        # Make ROI/binning settings visible in configuration documents.
+        # AreaDetectorCam._default_read_attrs=() strips Kind.normal from all
+        # cam signals at instantiation; restore the ones we care about here.
+        for sig in [
+            self.cam.min_x, self.cam.min_y,
+            self.cam.size.size_x, self.cam.size.size_y,
+            self.cam.max_size.max_size_x, self.cam.max_size.max_size_y,
+            self.cam.bin_x, self.cam.bin_y,
+        ]:
+            sig.kind = Kind.config
 
     def stage(self):
         if self._staged in [Staged.yes, Staged.partially]:
