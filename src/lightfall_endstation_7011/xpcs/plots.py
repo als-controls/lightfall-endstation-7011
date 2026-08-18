@@ -45,6 +45,7 @@ class _CurvePlot(QWidget):
         self._plot.setLabel("left", self.y_label)
         self._plot.addLegend()
         self._curves: dict[str, pg.PlotDataItem] = {}
+        self._errors: dict[str, pg.ErrorBarItem] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._plot)
@@ -52,17 +53,47 @@ class _CurvePlot(QWidget):
     def _set_curve(self, curve_id: str, x, y, roi_order=None, colors=None) -> None:
         if curve_id not in self._curves:
             color = color_for(curve_id, roi_order, colors)
-            kwargs = {"name": curve_id}
+            # NaN means "not measured" -- an ROI added mid-run has no I(t)
+            # before it existed, and a lag can have too few pairs to estimate.
+            # Break the line there rather than drawing across the gap.
+            kwargs = {"name": curve_id, "connect": "finite"}
             if color is not None:
                 kwargs["pen"] = pg.mkPen(color, width=2)
             self._curves[curve_id] = self._plot.plot(**kwargs)
         self._curves[curve_id].setData(np.asarray(x, dtype=float),
                                        np.asarray(y, dtype=float))
 
+    def _set_errors(self, curve_id: str, x, y, sigma) -> None:
+        """Attach (or update) error bars for a curve.
+
+        Bars are only drawn where sigma is finite: a lag with fewer than two
+        accumulated pairs reports NaN, and drawing that as a zero-height bar
+        would read as certainty rather than as no estimate.
+        """
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        sigma = np.asarray(sigma, dtype=float)
+        finite = np.isfinite(sigma) & np.isfinite(y)
+        item = self._errors.get(curve_id)
+        if item is None:
+            pen = self._curves[curve_id].opts.get("pen")
+            item = pg.ErrorBarItem(pen=pen)
+            self._plot.addItem(item)
+            self._errors[curve_id] = item
+        # log-x plots position items in log space, matching the curve
+        xs = np.log10(x[finite]) if self.log_x else x[finite]
+        item.setData(x=xs, y=y[finite], height=2.0 * sigma[finite])
+
+    def _prune_errors(self, keep: set[str]) -> None:
+        for cid in list(self._errors):
+            if cid not in keep:
+                self._plot.removeItem(self._errors.pop(cid))
+
     def _prune(self, keep: set[str]) -> None:
         for cid in list(self._curves):
             if cid not in keep:
                 self._plot.removeItem(self._curves.pop(cid))
+        self._prune_errors(keep)
 
     def clear(self) -> None:
         self._prune(set())
@@ -73,13 +104,30 @@ class G2Plot(_CurvePlot):
     x_label = "tau (s)"
     y_label = "g2"
 
+    ERROR_BAR_TOOLTIP = (
+        "Error bars: ±1 standard error, assuming independent pairs.\n"
+        "The estimate is optimistic at short tau (successive products share "
+        "frames) and conservative at long tau (cascade averaging suppresses "
+        "contrast faster than the pair count falls).\n"
+        "No bar is drawn where fewer than two pairs have accumulated."
+    )
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setToolTip(self.ERROR_BAR_TOOLTIP)
+
     def update_from_payload(self, payload: dict, colors: dict | None = None) -> None:
         tau = payload.get("tau") or []
         g2 = payload.get("g2") or {}
         roi_order = [k for k in g2 if k != "average"]
+        errs = payload.get("g2_err") or {}
         for cid, ys in g2.items():
             if len(ys) == len(tau) and tau:
                 self._set_curve(cid, tau, ys, roi_order, colors)
+                sigma = errs.get(cid)
+                # absent uncertainty is left undrawn rather than drawn as zero
+                if sigma is not None and len(sigma) == len(tau):
+                    self._set_errors(cid, tau, ys, sigma)
         self._prune(set(g2))
 
 

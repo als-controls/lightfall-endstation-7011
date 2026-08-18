@@ -109,3 +109,74 @@ def test_convergence_consumes_real_metrics_keys(qtbot):
     assert ("average", "Time-scale 1") in w._series
     assert ("roi-abc", "Time-scale 0") in w._series
     assert not any(scale.endswith(" end") for _, scale in w._series)
+
+
+def test_g2_plot_draws_error_bars_when_payload_carries_them(qtbot):
+    w = G2Plot()
+    qtbot.addWidget(w)
+    w.update_from_payload({
+        "tau": [1.0, 2.0, 4.0],
+        "g2": {"average": [1.5, 1.2, 1.0]},
+        "g2_err": {"average": [0.05, 0.08, 0.2]},
+    })
+    assert "average" in w._errors
+    assert w._errors["average"] in w._plot.plotItem.items
+
+
+def test_g2_plot_has_no_error_bars_without_them(qtbot):
+    """The linear backend supplies no uncertainty; absence must not be drawn
+    as a zero-height bar, which would read as certainty."""
+    w = G2Plot()
+    qtbot.addWidget(w)
+    w.update_from_payload({"tau": [1.0, 2.0], "g2": {"average": [1.5, 1.2]}})
+    assert w._errors == {}
+
+
+def test_g2_plot_drops_error_bars_when_a_curve_goes_away(qtbot):
+    w = G2Plot()
+    qtbot.addWidget(w)
+    w.update_from_payload({"tau": [1.0], "g2": {"average": [1.5], "r1": [2.0]},
+                           "g2_err": {"average": [0.1], "r1": [0.2]}})
+    assert set(w._errors) == {"average", "r1"}
+    w.update_from_payload({"tau": [1.0], "g2": {"average": [1.5]},
+                           "g2_err": {"average": [0.1]}})
+    assert set(w._errors) == {"average"}
+    assert not any(w._errors.get("r1") is item
+                   for item in w._plot.plotItem.items)
+
+
+def test_g2_plot_tolerates_nan_sigma(qtbot):
+    """Lags with fewer than two accumulated pairs report NaN, not zero."""
+    w = G2Plot()
+    qtbot.addWidget(w)
+    w.update_from_payload({
+        "tau": [1.0, 2.0],
+        "g2": {"average": [1.5, 1.2]},
+        "g2_err": {"average": [0.05, float("nan")]},
+    })
+    assert "average" in w._errors
+
+
+def test_intensity_plot_breaks_the_line_over_missing_history(qtbot):
+    """An ROI added mid-run has no I(t) before it existed. The gap must show as
+    a gap, not as a line joining across frames that were never measured."""
+    w = IntensityPlot()
+    qtbot.addWidget(w)
+    w.update_from_payload({"intensity": {
+        "frame_index": [0, 1, 2, 3],
+        "average": [1.0, 1.1, 1.2, 1.3],
+        "late": [float("nan"), float("nan"), 2.0, 2.1],
+    }})
+    assert set(w._curves) == {"average", "late"}
+    assert w._curves["late"].opts["connect"] == "finite"
+
+
+def test_g2_plot_explains_its_error_bars(qtbot):
+    """The bars are a naive estimator whose bias flips sign with tau. Whoever
+    is steering on them at 2am should be able to find that out from the panel,
+    not only from the README."""
+    w = G2Plot()
+    qtbot.addWidget(w)
+    tip = w.toolTip().lower()
+    assert "pair" in tip
+    assert "short" in tip and "long" in tip
