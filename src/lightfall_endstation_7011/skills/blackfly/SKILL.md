@@ -40,6 +40,6 @@ default-route NIC.
 4. Read `references/panel_template.py` for the canonical PanelPlugin source.
 5. Substitute `<IP>` with the chosen `device_ip` and `<HOST>` with the chosen
    `bind_ip` in the template's text.
-6. Call `mcp__panel_builder__ncs_create_user_plugin` with the substituted
+6. Call the `ncs_create_user_plugin` tool (panel_builder server) with the substituted
    source as the `code` argument and a name like `blackfly_<short-id>`.
 7. Confirm to the user: the new panel will appear under View > User > Blackfly S Live View.

@@ -65,11 +65,16 @@ class BlackflyAgent(ToolPlugin):
         return Path(__file__).parent / "references"
 
     def create_tools(self) -> list[Any]:
+        # Backend-neutral decorator (works on Claude and Gemini/agy); the SDK one
+        # only for Lightfall builds that predate lightfall.agents.tooling.
         try:
-            from claude_agent_sdk import tool
+            from lightfall.agents.tooling import tool
         except ImportError:
-            logger.warning("claude_agent_sdk not available, blackfly skill tools disabled")
-            return []
+            try:
+                from claude_agent_sdk import tool
+            except ImportError:
+                logger.warning("no agent tool decorator available, blackfly skill tools disabled")
+                return []
 
         @tool(
             name="discover_blackfly_cameras",

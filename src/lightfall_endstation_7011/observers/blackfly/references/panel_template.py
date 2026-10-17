@@ -5,7 +5,7 @@ instructs the embedded Claude agent to:
   1. read this file's source verbatim,
   2. substitute the placeholders <IP> (camera IPv4) and <HOST> (host NIC IPv4)
      with values gathered from the user (and/or discover_blackfly_cameras),
-  3. pass the substituted text to mcp__panel_builder__ncs_create_user_plugin.
+  3. pass the substituted text to the ncs_create_user_plugin tool (panel_builder server).
 
 Two placeholders only — keep it that way. If a user wants something fancier
 (extra controls, multi-camera layout, ROI overlays), they edit the resulting

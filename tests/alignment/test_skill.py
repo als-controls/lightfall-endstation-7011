@@ -84,3 +84,15 @@ def test_manifest_registers_reflection_alignment():
     assert entry.import_path == (
         "lightfall_endstation_7011.alignment.skill:ReflectionAlignmentAgent"
     )
+
+
+def test_tools_are_backend_neutral_without_claude_sdk(monkeypatch):
+    """Tools come from lightfall.agents.tooling, so they work on any agent backend."""
+    import sys
+
+    from lightfall.agents.tooling import ToolSpec
+
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", None)  # import fails
+    tools = ReflectionAlignmentAgent().create_tools()
+    assert tools and all(isinstance(t, ToolSpec) for t in tools)
+    assert "check_beam" in {t.name for t in tools}

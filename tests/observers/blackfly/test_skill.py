@@ -62,3 +62,26 @@ def test_panel_template_is_parseable_python():
     # And the placeholders the workflow promises must actually be present:
     assert "<IP>" in src
     assert "<HOST>" in src
+
+
+def test_tools_are_backend_neutral_without_claude_sdk(monkeypatch):
+    """Tools come from lightfall.agents.tooling, so they work on any agent backend."""
+    import sys
+
+    from lightfall.agents.tooling import ToolSpec
+
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", None)  # import fails
+    tools = BlackflyAgent().create_tools()
+    assert [t.name for t in tools] == ["discover_blackfly_cameras"]
+    assert isinstance(tools[0], ToolSpec)
+
+
+def test_model_facing_text_has_no_claude_tool_ids():
+    """Gemini names the tool lightfall_panel_builder / ncs_create_user_plugin, not mcp__…."""
+    from pathlib import Path
+
+    import lightfall_endstation_7011
+
+    root = Path(lightfall_endstation_7011.__file__).parent
+    for rel in ("skills/blackfly/SKILL.md", "observers/blackfly/references/panel_template.py"):
+        assert "mcp__" not in (root / rel).read_text(encoding="utf-8"), rel

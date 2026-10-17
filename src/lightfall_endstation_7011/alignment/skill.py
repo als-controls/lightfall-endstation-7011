@@ -460,11 +460,16 @@ class ReflectionAlignmentAgent(ToolPlugin):
         return 30
 
     def create_tools(self) -> list[Any]:
+        # Backend-neutral decorator (works on Claude and Gemini/agy); the SDK one
+        # only for Lightfall builds that predate lightfall.agents.tooling.
         try:
-            from claude_agent_sdk import tool
+            from lightfall.agents.tooling import tool
         except ImportError:
-            logger.warning("claude_agent_sdk not available, reflection_alignment tools disabled")
-            return []
+            try:
+                from claude_agent_sdk import tool
+            except ImportError:
+                logger.warning("no agent tool decorator available, reflection_alignment tools disabled")
+                return []
 
         @tool(
             name="check_beam",
