@@ -241,16 +241,27 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
         # Surface the full-frame summed counts (ROIStat total) as the
         # hinted field so live plots / best-effort callbacks default to it.
         self.roi_stat1.total.kind = Kind.hinted
-        # Make ROI/binning settings visible in configuration documents.
-        # AreaDetectorCam._default_read_attrs=() strips Kind.normal from all
-        # cam signals at instantiation; restore the ones we care about here.
-        for sig in [
-            self.cam.min_x, self.cam.min_y,
-            self.cam.size.size_x, self.cam.size.size_y,
-            self.cam.max_size.max_size_x, self.cam.max_size.max_size_y,
-            self.cam.bin_x, self.cam.bin_y,
-        ]:
-            sig.kind = Kind.config
+        # Make ROI/binning/size settings visible in configuration documents.
+        # AreaDetectorCam._default_read_attrs=() strips Kind.normal from all cam signals
+        # at instantiation. Use _set_kind for flat signals, and update _component_kinds
+        # directly for DDC containers BEFORE accessing them.
+
+        # Flat cam signals
+        for attr in ['min_x', 'min_y', 'bin_x', 'bin_y']:
+            self.cam._set_kind(attr, Kind.config)
+
+        # DDC containers: update _component_kinds so kind persists if re-instantiated,
+        # AND set the instance kind directly (the DDC is pre-instantiated by super().__init__
+        # with Kind.omitted before this fix code runs).
+        self.cam._component_kinds['size'] = Kind.config
+        self.cam._component_kinds['max_size'] = Kind.config
+        self.cam.size.kind = Kind.config
+        self.cam.max_size.kind = Kind.config
+        # Fix sub-signal kinds within each DDC
+        self.cam.size._set_kind('size_x', Kind.config)
+        self.cam.size._set_kind('size_y', Kind.config)
+        self.cam.max_size._set_kind('max_size_x', Kind.config)
+        self.cam.max_size._set_kind('max_size_y', Kind.config)
 
     def stage(self):
         if self._staged == Staged.yes:
