@@ -210,8 +210,9 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
         pimte = PIMTE3("13PIMTE1:", name="pimte")
         pimte.hdf5.reg = db.reg  # set databroker registry
 
-        # Configure file paths
-        pimte.hdf5.write_path_template = "/data/<beamline>/pimte/%Y/%m/%d/"
+        # Configure file paths (normally set from the tiled_beamline preference;
+        # /data/7.0.1.1/pimte/ must already exist on the IOC host, see devices.paths)
+        pimte.hdf5.write_path_template = "/data/7.0.1.1/pimte/%Y/%m/%d/"
         pimte.hdf5.root = "/data/"
 
         # Take acquisition

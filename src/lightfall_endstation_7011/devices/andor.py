@@ -179,8 +179,9 @@ class Andor(StageOnFirstTrigger, SingleTrigger, AndorDetector):
         andor = Andor("13ANDOR1:", name="andor")
         andor.hdf5.reg = db.reg  # set databroker registry
 
-        # Configure file paths
-        andor.hdf5.write_path_template = "/data/<beamline>/andor/%Y/%m/%d/"
+        # Configure file paths (normally set from the tiled_beamline preference;
+        # /data/7.0.1.1/andor/ must already exist on the IOC host, see devices.paths)
+        andor.hdf5.write_path_template = "/data/7.0.1.1/andor/%Y/%m/%d/"
         andor.hdf5.root = "/data/"
 
         # Take acquisition

@@ -3,6 +3,14 @@
 The data-movement service copies files relative to ``/data``, so writing
 to ``/data/<beamline>/<detector>/%Y/%m/%d/`` gives every site distinct,
 identical paths on all destinations.
+
+The IOC must find ``/data/<beamline>/<detector>/`` already in place: the
+HDF5 plugin stages with ``create_directory = -3``, so the IOC creates only
+the ``%Y/%m/%d`` levels, and a missing parent fails staging with
+``Path ... does not exist on IOC``.  Create it on the IOC host, owned by
+the user the IOC runs as (e.g. ``/data/7.0.1.1/andor`` and
+``/data/7.0.1.1/pimte`` on suzume, where ``picam.service`` runs as root),
+before setting the ``tiled_beamline`` preference.
 """
 
 from __future__ import annotations
