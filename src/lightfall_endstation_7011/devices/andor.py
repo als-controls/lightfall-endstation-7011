@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import time
 from collections import OrderedDict
+from pathlib import PurePosixPath
 
 import numpy as np
 from ophyd import (
@@ -29,6 +30,8 @@ from ophyd.areadetector.filestore_mixins import (
 )
 from ophyd.areadetector.plugins import ROIStatNPlugin_V23, TransformPlugin
 from ophyd.utils import set_and_wait
+
+from .paths import BeamlineDataComponent
 
 logger = logging.getLogger(__name__)
 
@@ -105,9 +108,20 @@ class HDF5PluginSWMR(HDF5Plugin):
 class HDF5PluginWithFileStore(
     FramesPerPointNumImages, AndorWarmupFix, HDF5PluginSWMR, FileStoreHDF5IterativeWrite
 ):
-    """Complete HDF5 plugin with file store, warmup fix, and SWMR."""
+    """Complete HDF5 plugin with file store, warmup fix, and SWMR.
 
-    pass
+    Uses a POSIX ``reg_root`` so the IOC-side ``/data/`` root is accepted
+    when the client runs on Windows (same fix as the PIMTE3 plugin).
+    """
+
+    @FileStorePluginBase.reg_root.setter
+    def reg_root(self, val):
+        if val is None:
+            val = "/"
+        root = PurePosixPath(val)
+        if not root.is_absolute():
+            raise ValueError(f"The root part of the path must be absolute not {root=}.")
+        self._root = root
 
 
 class StageOnFirstTrigger(ADBase):
@@ -165,8 +179,9 @@ class Andor(StageOnFirstTrigger, SingleTrigger, AndorDetector):
         andor = Andor("13ANDOR1:", name="andor")
         andor.hdf5.reg = db.reg  # set databroker registry
 
-        # Configure file paths
-        andor.hdf5.write_path_template = "/data/andor/%Y/%m/%d/"
+        # Configure file paths (normally set from the tiled_beamline preference;
+        # /data/7.0.1.1/andor/ must already exist on the IOC host, see devices.paths)
+        andor.hdf5.write_path_template = "/data/7.0.1.1/andor/%Y/%m/%d/"
         andor.hdf5.root = "/data/"
 
         # Take acquisition
@@ -179,9 +194,10 @@ class Andor(StageOnFirstTrigger, SingleTrigger, AndorDetector):
     trans1 = C(TransformPlugin, "Trans1:")
     image1 = C(ImagePlugin, "image1:")
     roi_stat1 = C(ROIStatNPlugin_V23, "ROIStat1:1:")
-    hdf5 = C(
+    hdf5 = BeamlineDataComponent(
         HDF5PluginWithFileStore,
         "HDF1:",
+        detector="andor",
         write_path_template="/data/andor/%Y/%m/%d/",
         root="/data/",
         reg=None,  # placeholder to be set on instance

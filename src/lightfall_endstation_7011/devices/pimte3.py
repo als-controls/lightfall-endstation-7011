@@ -32,6 +32,8 @@ from ophyd.areadetector.filestore_mixins import (
 from ophyd.areadetector.plugins import ROIStatNPlugin_V23, TransformPlugin
 from ophyd.utils import set_and_wait
 
+from .paths import BeamlineDataComponent
+
 logger = logging.getLogger(__name__)
 
 
@@ -208,8 +210,9 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
         pimte = PIMTE3("13PIMTE1:", name="pimte")
         pimte.hdf5.reg = db.reg  # set databroker registry
 
-        # Configure file paths
-        pimte.hdf5.write_path_template = "/data/pimte/%Y/%m/%d/"
+        # Configure file paths (normally set from the tiled_beamline preference;
+        # /data/7.0.1.1/pimte/ must already exist on the IOC host, see devices.paths)
+        pimte.hdf5.write_path_template = "/data/7.0.1.1/pimte/%Y/%m/%d/"
         pimte.hdf5.root = "/data/"
 
         # Take acquisition
@@ -222,9 +225,10 @@ class PIMTE3(StageOnFirstTrigger, SingleTrigger, DetectorBase):
     image1 = C(ImagePlugin, "image1:")
     trans1 = C(TransformPlugin, "Trans1:")
     roi_stat1 = C(ROIStatNPlugin_V23, "ROIStat1:1:")
-    hdf5 = C(
+    hdf5 = BeamlineDataComponent(
         HDF5PluginWithFileStore,
         "HDF1:",
+        detector="pimte",
         write_path_template="/data/pimte/%Y/%m/%d/",
         root="/data/",
         reg=None,  # placeholder to be set on instance
