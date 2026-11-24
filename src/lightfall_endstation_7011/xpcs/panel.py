@@ -74,7 +74,7 @@ class XPCSPanel(BasePanel):
         # setCentralWidget and there is only one). Dock at the bottom as an
         # on-demand analysis instrument, with a sidebar button.
         default_area="bottom",
-        sidebar_group="top",
+        sidebar_order=100,  # last icon in the bottom section
     )
 
     def __init__(
